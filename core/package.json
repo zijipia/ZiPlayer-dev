@@ -1,11 +1,14 @@
 {
 	"name": "ziplayer",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"description": "A modular Discord voice player with plugin system",
 	"keywords": [
 		"ZiPlayer",
-		"discord", "music", "player", "voice",
-	"@ziplayer/plugin"
+		"discord",
+		"music",
+		"player",
+		"voice",
+		"@ziplayer/plugin"
 	],
 	"homepage": "https://github.com/ZiProject/ZiPlayer#readme",
 	"bugs": {

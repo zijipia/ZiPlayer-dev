@@ -165,6 +165,16 @@ client.on("messageCreate", async (message) => {
 		message.reply(`🔁 Autoplay is now ${!autoPlay ? "enabled" : "disabled"}`);
 	}
 
+	if (command === "loop") {
+		const player = manager.get(message.guild.id);
+		if (!player) return message.reply("No music is playing!");
+		const mode = args[0] as "track" | "queue" | "off" | undefined;
+		const current = player.loop();
+		const nextMode = mode ?? (current === "off" ? "track" : current === "track" ? "queue" : "off");
+		player.loop(nextMode);
+		message.reply(`🔁 Loop mode set to ${nextMode}`);
+	}
+
 	if (command === "status") {
 		const player = manager.get(message.guild.id);
 		if (!player) return message.reply("No music is playing!");
