@@ -1,0 +1,526 @@
+import { EventEmitter } from "events";
+import {
+	createAudioPlayer,
+	createAudioResource,
+	AudioPlayerStatus,
+	VoiceConnection,
+	AudioPlayer as DiscordAudioPlayer,
+	VoiceConnectionStatus,
+	joinVoiceChannel,
+	AudioResource,
+	StreamType,
+} from "@discordjs/voice";
+
+import { VoiceChannel } from "discord.js";
+import { Readable } from "stream";
+import { Track, PlayerOptions, PlayerEvents, SourcePlugin, SearchResult, ProgressBarOptions } from "../types";
+import { Queue } from "./Queue";
+import { PluginManager } from "../plugins";
+
+export declare interface Player {
+	on<K extends keyof PlayerEvents>(event: K, listener: (...args: PlayerEvents[K]) => void): this;
+	emit<K extends keyof PlayerEvents>(event: K, ...args: PlayerEvents[K]): boolean;
+}
+
+export class Player extends EventEmitter {
+	public readonly guildId: string;
+	public connection: VoiceConnection | null = null;
+	public audioPlayer: DiscordAudioPlayer;
+	public queue: Queue;
+	public volume: number = 100;
+	public isPlaying: boolean = false;
+	public isPaused: boolean = false;
+	public options: PlayerOptions;
+	public pluginManager: PluginManager;
+	public userdata?: Record<string, any>;
+	private leaveTimeout: NodeJS.Timeout | null = null;
+	private currentResource: AudioResource | null = null;
+	private volumeInterval: NodeJS.Timeout | null = null;
+
+	private withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+		const timeout = this.options.extractorTimeout ?? 15000;
+		return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), timeout))]);
+	}
+
+	private debug(message?: any, ...optionalParams: any[]): void {
+		if (this.listenerCount("debug") > 0) {
+			this.emit("debug", message, ...optionalParams);
+		}
+	}
+
+	constructor(guildId: string, options: PlayerOptions = {}) {
+		super();
+		this.debug(`[Player] Constructor called for guildId: ${guildId}`);
+		this.guildId = guildId;
+		this.queue = new Queue();
+		this.audioPlayer = createAudioPlayer();
+		this.pluginManager = new PluginManager();
+
+		this.options = {
+			leaveOnEnd: true,
+			leaveOnEmpty: true,
+			leaveTimeout: 100000,
+			volume: 100,
+			quality: "high",
+			extractorTimeout: 50000,
+			...options,
+		};
+
+		this.volume = this.options.volume || 100;
+		this.userdata = this.options.userdata;
+		this.setupEventListeners();
+	}
+
+	private setupEventListeners(): void {
+		this.audioPlayer.on(AudioPlayerStatus.Playing, () => {
+			this.debug(`[Player] AudioPlayerStatus.Playing`);
+			this.isPlaying = true;
+			this.isPaused = false;
+			const track = this.queue.currentTrack;
+			if (track) {
+				this.debug(`[Player] Track started: ${track.title}`);
+				this.emit("trackStart", track);
+			}
+		});
+
+		this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
+			this.debug(`[Player] AudioPlayerStatus.Idle`);
+			this.isPlaying = false;
+			this.isPaused = false;
+			const track = this.queue.currentTrack;
+
+			if (track) {
+				this.debug(`[Player] Track ended: ${track.title}`);
+				this.emit("trackEnd", track);
+			}
+
+			this.playNext();
+		});
+
+		this.audioPlayer.on(AudioPlayerStatus.Paused, () => {
+			this.debug(`[Player] AudioPlayerStatus.Paused`);
+			this.isPaused = true;
+			const track = this.queue.currentTrack;
+			if (track) {
+				this.debug(`[Player] Player paused on track: ${track.title}`);
+				this.emit("playerPause", track);
+			}
+		});
+
+		this.audioPlayer.on("error", (error) => {
+			this.debug(`[Player] AudioPlayer error:`, error);
+			this.emit("playerError", error, this.queue.currentTrack || undefined);
+			this.playNext();
+		});
+	}
+
+	addPlugin(plugin: SourcePlugin): void {
+		this.debug(`[Player] Adding plugin: ${plugin.name}`);
+		this.pluginManager.register(plugin);
+	}
+
+	removePlugin(name: string): boolean {
+		this.debug(`[Player] Removing plugin: ${name}`);
+		return this.pluginManager.unregister(name);
+	}
+
+	async connect(channel: VoiceChannel): Promise<VoiceConnection> {
+		try {
+			this.debug(`[Player] Connecting to voice channel: ${channel.id}`);
+			this.connection = joinVoiceChannel({
+				channelId: channel.id,
+				guildId: channel.guildId,
+				adapterCreator: channel.guild.voiceAdapterCreator as any,
+			});
+
+			this.connection.on(VoiceConnectionStatus.Disconnected, () => {
+				this.debug(`[Player] VoiceConnectionStatus.Disconnected`);
+				this.destroy();
+			});
+
+			this.connection.on("error", (error) => {
+				this.debug(`[Player] Voice connection error:`, error);
+				this.emit("connectionError", error);
+			});
+
+			this.connection.subscribe(this.audioPlayer);
+
+			if (this.leaveTimeout) {
+				clearTimeout(this.leaveTimeout);
+				this.leaveTimeout = null;
+			}
+
+			return this.connection;
+		} catch (error) {
+			this.debug(`[Player] Connection error:`, error);
+			this.emit("connectionError", error as Error);
+			throw error;
+		}
+	}
+
+	async search(query: string, requestedBy: string): Promise<SearchResult> {
+		this.debug(`[Player] Search called with query: ${query}, requestedBy: ${requestedBy}`);
+		const plugin = this.pluginManager.findPlugin(query);
+		if (!plugin) {
+			this.debug(`[Player] No plugin found to handle: ${query}`);
+			throw new Error(`No plugin found to handle: ${query}`);
+		}
+
+		try {
+			return await this.withTimeout(plugin.search(query, requestedBy), "Search operation timed out");
+		} catch (error) {
+			this.debug(`[Player] Search error:`, error);
+			this.emit("playerError", error as Error);
+			throw error;
+		}
+	}
+
+	async play(query: string | Track, requestedBy?: string): Promise<boolean> {
+		try {
+			this.debug(`[Player] Play called with query: ${typeof query === "string" ? query : query?.title}`);
+			let tracksToAdd: Track[] = [];
+
+			if (typeof query === "string") {
+				const searchResult = await this.search(query, requestedBy || "Unknown");
+				tracksToAdd = searchResult.tracks;
+
+				if (searchResult.playlist) {
+					this.debug(`[Player] Added playlist: ${searchResult.playlist.name} (${tracksToAdd.length} tracks)`);
+				}
+			} else {
+				tracksToAdd = [query];
+			}
+
+			if (tracksToAdd.length === 0) {
+				this.debug(`[Player] No tracks found for play`);
+				throw new Error("No tracks found");
+			}
+
+			// Add tracks to queue
+			for (const track of tracksToAdd) {
+				this.debug(`[Player] Adding track to queue: ${track.title}`);
+				this.queue.add(track);
+				this.emit("queueAdd", track);
+			}
+
+			// Start playing if not already playing
+			if (!this.isPlaying) {
+				return this.playNext();
+			}
+
+			return true;
+		} catch (error) {
+			this.debug(`[Player] Play error:`, error);
+			this.emit("playerError", error as Error);
+			return false;
+		}
+	}
+
+	private async generateWillNext(): Promise<void> {
+		const willnext = this.queue.willNextTrack();
+
+		const lastTrack = this.queue.previousTracks[this.queue.previousTracks.length - 1] ?? this.queue.currentTrack;
+		const plugin = this.pluginManager.findPlugin(lastTrack.url) || this.pluginManager.get(lastTrack.source);
+		if (plugin && typeof plugin.getRelatedTracks === "function") {
+			try {
+				const related = await this.withTimeout(
+					plugin.getRelatedTracks(lastTrack.url, {
+						limit: 10,
+						history: this.queue.previousTracks,
+					}),
+					"getRelatedTracks timed out",
+				);
+
+				if (related && related.length > 0) {
+					const randomchoice = Math.floor(Math.random() * related.length);
+					const nextTrack = this.queue.nextTrack ? this.queue.nextTrack : related[randomchoice];
+					this.queue.willNextTrack(nextTrack);
+					this.debug(`[Player] Will next track if autoplay: ${nextTrack?.title}`);
+					this.emit("willPlay", nextTrack, related);
+				}
+			} catch (err) {
+				this.debug(`[Player] getRelatedTracks error:`, err);
+			}
+		}
+	}
+
+	private async playNext(): Promise<boolean> {
+		this.debug(`[Player] playNext called`);
+		const track = this.queue.next();
+		if (!track) {
+			if (this.queue.autoPlay()) {
+				const willnext = this.queue.willNextTrack();
+				console.log("willnext", willnext);
+				if (willnext) {
+					this.debug(`[Player] Auto-playing next track: ${willnext.title}`);
+					this.queue.addMultiple([willnext]);
+					return this.playNext();
+				}
+			}
+
+			this.debug(`[Player] No next track in queue`);
+			this.isPlaying = false;
+			this.emit("queueEnd");
+
+			if (this.options.leaveOnEnd) {
+				this.scheduleLeave();
+			}
+			return false;
+		}
+
+		this.generateWillNext();
+
+		try {
+			// Find plugin that can handle this track
+			const plugin = this.pluginManager.findPlugin(track.url) || this.pluginManager.get(track.source);
+
+			if (!plugin) {
+				this.debug(`[Player] No plugin found for track: ${track.title}`);
+				throw new Error(`No plugin found for track: ${track.title}`);
+			}
+
+			this.debug(`[Player] Getting stream for track: ${track.title}`);
+			this.debug(`[Player] Using plugin: ${plugin.name}`);
+			this.debug(`[Track] Track Info:`, track);
+			let streamInfo;
+			try {
+				streamInfo = await this.withTimeout(plugin.getStream(track), "getStream timed out");
+			} catch (streamError) {
+				this.debug(`[Player] getStream failed, trying getFallback:`, streamError);
+				const allplugs = this.pluginManager.getAll();
+				for (const p of allplugs) {
+					if (typeof p.getFallback !== "function") {
+						continue;
+					}
+					try {
+						streamInfo = await this.withTimeout(p.getFallback(track), `getFallback timed out for plugin ${p.name}`);
+						if (!streamInfo.stream) continue;
+						this.debug(`[Player] getFallback succeeded with plugin ${p.name} for track: ${track.title}`);
+						break;
+					} catch (fallbackError) {
+						this.debug(`[Player] getFallback failed with plugin ${p.name}:`, fallbackError);
+					}
+				}
+				if (!streamInfo?.stream) {
+					throw new Error(`All getFallback attempts failed for track: ${track.title}`);
+				}
+				this.debug(streamInfo);
+			}
+
+			function mapToStreamType(type: string): StreamType {
+				switch (type) {
+					case "webm/opus":
+						return StreamType.WebmOpus;
+					case "ogg/opus":
+						return StreamType.OggOpus;
+					case "arbitrary":
+						return StreamType.Arbitrary;
+					default:
+						return StreamType.Arbitrary;
+				}
+			}
+
+			let stream: Readable = streamInfo.stream;
+			let inputType = mapToStreamType(streamInfo.type);
+
+			this.currentResource = createAudioResource(stream, {
+				metadata: track,
+				inputType,
+				inlineVolume: true,
+			});
+
+			// Apply initial volume using the resource's VolumeTransformer
+			if (this.volumeInterval) {
+				clearInterval(this.volumeInterval);
+				this.volumeInterval = null;
+			}
+			this.currentResource.volume?.setVolume(this.volume / 100);
+
+			this.debug(`[Player] Playing resource for track: ${track.title}`);
+			this.audioPlayer.play(this.currentResource);
+			return true;
+		} catch (error) {
+			this.debug(`[Player] playNext error:`, error);
+			this.emit("playerError", error as Error, track);
+			return this.playNext();
+		}
+	}
+
+	pause(): boolean {
+		this.debug(`[Player] pause called`);
+		if (this.isPlaying && !this.isPaused) {
+			return this.audioPlayer.pause();
+		}
+		return false;
+	}
+
+	resume(): boolean {
+		this.debug(`[Player] resume called`);
+		if (this.isPaused) {
+			const result = this.audioPlayer.unpause();
+			if (result) {
+				const track = this.queue.currentTrack;
+				if (track) {
+					this.debug(`[Player] Player resumed on track: ${track.title}`);
+					this.emit("playerResume", track);
+				}
+			}
+			return result;
+		}
+		return false;
+	}
+
+	stop(): boolean {
+		this.debug(`[Player] stop called`);
+		this.queue.clear();
+		const result = this.audioPlayer.stop();
+		this.isPlaying = false;
+		this.isPaused = false;
+		this.emit("playerStop");
+		return result;
+	}
+
+	skip(): boolean {
+		this.debug(`[Player] skip called`);
+		if (this.isPlaying || this.isPaused) {
+			return this.audioPlayer.stop();
+		}
+		return !!this.playNext();
+	}
+
+	setVolume(volume: number): boolean {
+		this.debug(`[Player] setVolume called: ${volume}`);
+		if (volume < 0 || volume > 200) return false;
+
+		const oldVolume = this.volume;
+		this.volume = volume;
+		const resourceVolume = this.currentResource?.volume;
+
+		if (resourceVolume) {
+			if (this.volumeInterval) clearInterval(this.volumeInterval);
+
+			const start = resourceVolume.volume;
+			const target = this.volume / 100;
+			const steps = 10;
+			let currentStep = 0;
+
+			this.volumeInterval = setInterval(() => {
+				currentStep++;
+				const value = start + ((target - start) * currentStep) / steps;
+				resourceVolume.setVolume(value);
+				if (currentStep >= steps) {
+					clearInterval(this.volumeInterval!);
+					this.volumeInterval = null;
+				}
+			}, 500);
+		}
+
+		this.emit("volumeChange", oldVolume, volume);
+		return true;
+	}
+
+	shuffle(): void {
+		this.debug(`[Player] shuffle called`);
+		this.queue.shuffle();
+	}
+
+	clearQueue(): void {
+		this.debug(`[Player] clearQueue called`);
+		this.queue.clear();
+	}
+
+	remove(index: number): Track | null {
+		this.debug(`[Player] remove called for index: ${index}`);
+		const track = this.queue.remove(index);
+		if (track) {
+			this.emit("queueRemove", track, index);
+		}
+		return track;
+	}
+
+	getProgressBar(options: ProgressBarOptions = {}): string {
+		const { size = 20, barChar = "▬", progressChar = "🔘" } = options;
+		const track = this.queue.currentTrack;
+		const resource = this.currentResource;
+		if (!track || !resource) return "";
+
+		const total = track.duration > 1000 ? track.duration : track.duration * 1000;
+		if (!total) return this.formatTime(resource.playbackDuration);
+
+		const current = resource.playbackDuration;
+		const ratio = Math.min(current / total, 1);
+		const progress = Math.round(ratio * size);
+		const bar = barChar.repeat(progress) + progressChar + barChar.repeat(size - progress);
+
+		return `${this.formatTime(current)} ${bar} ${this.formatTime(total)}`;
+	}
+
+	private formatTime(ms: number): string {
+		const totalSeconds = Math.floor(ms / 1000);
+		const hours = Math.floor(totalSeconds / 3600);
+		const minutes = Math.floor((totalSeconds % 3600) / 60);
+		const seconds = totalSeconds % 60;
+		const parts: string[] = [];
+		if (hours > 0) parts.push(String(hours).padStart(2, "0"));
+		parts.push(String(minutes).padStart(2, "0"));
+		parts.push(String(seconds).padStart(2, "0"));
+		return parts.join(":");
+	}
+
+	private scheduleLeave(): void {
+		this.debug(`[Player] scheduleLeave called`);
+		if (this.leaveTimeout) {
+			clearTimeout(this.leaveTimeout);
+		}
+
+		if (this.options.leaveOnEmpty && this.options.leaveTimeout) {
+			this.leaveTimeout = setTimeout(() => {
+				this.debug(`[Player] Leaving voice channel after timeout`);
+				this.destroy();
+			}, this.options.leaveTimeout);
+		}
+	}
+
+	destroy(): void {
+		this.debug(`[Player] destroy called`);
+		if (this.leaveTimeout) {
+			clearTimeout(this.leaveTimeout);
+			this.leaveTimeout = null;
+		}
+
+		this.audioPlayer.stop(true);
+
+		if (this.connection) {
+			this.connection.destroy();
+			this.connection = null;
+		}
+
+		this.queue.clear();
+		this.pluginManager.clear();
+		this.isPlaying = false;
+		this.isPaused = false;
+		this.emit("playerDestroy");
+		this.removeAllListeners();
+	}
+
+	// Getters
+	get queueSize(): number {
+		return this.queue.size;
+	}
+
+	get currentTrack(): Track | null {
+		return this.queue.currentTrack;
+	}
+
+	get upcomingTracks(): Track[] {
+		return this.queue.getTracks();
+	}
+
+	get previousTracks(): Track[] {
+		return this.queue.previousTracks;
+	}
+
+	get availablePlugins(): string[] {
+		return this.pluginManager.getAll().map((p) => p.name);
+	}
+}
