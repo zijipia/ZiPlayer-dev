@@ -92,7 +92,7 @@ export class PlayerManager extends EventEmitter {
 	get debugEnabled(): boolean {
 		return this.B_debug;
 	}
-	
+
 	destroy(): void {
 		this.debug(`[PlayerManager] Destroying all players`);
 		for (const player of this.players.values()) {
