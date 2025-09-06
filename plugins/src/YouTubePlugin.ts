@@ -38,13 +38,7 @@ export class YouTubePlugin extends BasePlugin {
 	validate(url: string): boolean {
 		try {
 			const parsed = new URL(url);
-			const allowedHosts = [
-				'youtube.com',
-				'www.youtube.com',
-				'music.youtube.com',
-				'youtu.be',
-				'www.youtu.be'
-			];
+			const allowedHosts = ["youtube.com", "www.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"];
 			return allowedHosts.includes(parsed.hostname.toLowerCase());
 		} catch (e) {
 			return false;
