@@ -5,10 +5,14 @@ import { PlayerManagerOptions, PlayerOptions, Track, SourcePlugin } from "../typ
 export class PlayerManager extends EventEmitter {
 	private players: Map<string, Player> = new Map();
 	private plugins: SourcePlugin[];
+	private B_debug: boolean = false;
 
 	private debug(message?: any, ...optionalParams: any[]): void {
 		if (this.listenerCount("debug") > 0) {
 			this.emit("debug", message, ...optionalParams);
+			if (!this.B_debug) {
+				this.B_debug = true;
+			}
 		}
 	}
 
@@ -17,13 +21,20 @@ export class PlayerManager extends EventEmitter {
 		this.plugins = options.plugins || [];
 	}
 
-	create(guildId: string, options?: PlayerOptions): Player {
+	private resolveGuildId(guildOrId: string | { id: string }): string {
+		if (typeof guildOrId === "string") return guildOrId;
+		if (guildOrId && typeof guildOrId === "object" && "id" in guildOrId) return guildOrId.id;
+		throw new Error("Invalid guild or guildId provided.");
+	}
+
+	create(guildOrId: string | { id: string }, options?: PlayerOptions): Player {
+		const guildId = this.resolveGuildId(guildOrId);
 		if (this.players.has(guildId)) {
 			return this.players.get(guildId)!;
 		}
 
 		this.debug(`[PlayerManager] Creating player for guildId: ${guildId}`);
-		const player = new Player(guildId, options);
+		const player = new Player(guildId, options, this);
 		this.plugins.forEach((plugin) => player.addPlugin(plugin));
 
 		// Forward all player events
@@ -53,11 +64,13 @@ export class PlayerManager extends EventEmitter {
 		return player;
 	}
 
-	get(guildId: string): Player | undefined {
+	get(guildOrId: string | { id: string }): Player | undefined {
+		const guildId = this.resolveGuildId(guildOrId);
 		return this.players.get(guildId);
 	}
 
-	delete(guildId: string): boolean {
+	delete(guildOrId: string | { id: string }): boolean {
+		const guildId = this.resolveGuildId(guildOrId);
 		const player = this.players.get(guildId);
 		if (player) {
 			this.debug(`[PlayerManager] Deleting player for guildId: ${guildId}`);
@@ -67,7 +80,8 @@ export class PlayerManager extends EventEmitter {
 		return false;
 	}
 
-	has(guildId: string): boolean {
+	has(guildOrId: string | { id: string }): boolean {
+		const guildId = this.resolveGuildId(guildOrId);
 		return this.players.has(guildId);
 	}
 
@@ -75,6 +89,10 @@ export class PlayerManager extends EventEmitter {
 		return this.players.size;
 	}
 
+	get debugEnabled(): boolean {
+		return this.B_debug;
+	}
+	
 	destroy(): void {
 		this.debug(`[PlayerManager] Destroying all players`);
 		for (const player of this.players.values()) {

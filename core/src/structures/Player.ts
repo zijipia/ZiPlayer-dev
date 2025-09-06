@@ -2,10 +2,12 @@ import { EventEmitter } from "events";
 import {
 	createAudioPlayer,
 	createAudioResource,
+	entersState,
 	AudioPlayerStatus,
 	VoiceConnection,
 	AudioPlayer as DiscordAudioPlayer,
 	VoiceConnectionStatus,
+	NoSubscriberBehavior,
 	joinVoiceChannel,
 	AudioResource,
 	StreamType,
@@ -16,7 +18,7 @@ import { Readable } from "stream";
 import { Track, PlayerOptions, PlayerEvents, SourcePlugin, SearchResult, ProgressBarOptions, LoopMode } from "../types";
 import { Queue } from "./Queue";
 import { PluginManager } from "../plugins";
-
+import type { PlayerManager } from "./PlayerManager";
 export declare interface Player {
 	on<K extends keyof PlayerEvents>(event: K, listener: (...args: PlayerEvents[K]) => void): this;
 	emit<K extends keyof PlayerEvents>(event: K, ...args: PlayerEvents[K]): boolean;
@@ -33,6 +35,7 @@ export class Player extends EventEmitter {
 	public options: PlayerOptions;
 	public pluginManager: PluginManager;
 	public userdata?: Record<string, any>;
+	private manager: PlayerManager;
 	private leaveTimeout: NodeJS.Timeout | null = null;
 	private currentResource: AudioResource | null = null;
 	private volumeInterval: NodeJS.Timeout | null = null;
@@ -49,12 +52,19 @@ export class Player extends EventEmitter {
 		}
 	}
 
-	constructor(guildId: string, options: PlayerOptions = {}) {
+	constructor(guildId: string, options: PlayerOptions = {}, manager: PlayerManager) {
 		super();
 		this.debug(`[Player] Constructor called for guildId: ${guildId}`);
 		this.guildId = guildId;
 		this.queue = new Queue();
-		this.audioPlayer = createAudioPlayer();
+		this.manager = manager;
+		this.audioPlayer = createAudioPlayer({
+			behaviors: {
+				noSubscriber: NoSubscriberBehavior.Pause,
+				maxMissedFrames: 100,
+			},
+		});
+
 		this.pluginManager = new PluginManager();
 
 		this.options = {
@@ -73,45 +83,60 @@ export class Player extends EventEmitter {
 	}
 
 	private setupEventListeners(): void {
-		this.audioPlayer.on(AudioPlayerStatus.Playing, () => {
-			this.debug(`[Player] AudioPlayerStatus.Playing`);
-			this.isPlaying = true;
-			this.isPaused = false;
-			const track = this.queue.currentTrack;
-			if (track) {
-				this.debug(`[Player] Track started: ${track.title}`);
-				this.emit("trackStart", track);
+		this.audioPlayer.on("stateChange", (oldState, newState) => {
+			this.debug(`[Player] AudioPlayer stateChange from ${oldState.status} to ${newState.status}`);
+			if (newState.status === AudioPlayerStatus.Idle && oldState.status !== AudioPlayerStatus.Idle) {
+				// Track ended
+				const track = this.queue.currentTrack;
+				if (track) {
+					this.debug(`[Player] Track ended: ${track.title}`);
+					this.emit("trackEnd", track);
+				}
+				this.playNext();
+			} else if (
+				newState.status === AudioPlayerStatus.Playing &&
+				(oldState.status === AudioPlayerStatus.Idle || oldState.status === AudioPlayerStatus.Buffering)
+			) {
+				// Track started
+				this.isPlaying = true;
+				this.isPaused = false;
+				const track = this.queue.currentTrack;
+				if (track) {
+					this.debug(`[Player] Track started: ${track.title}`);
+					this.emit("trackStart", track);
+				}
+			} else if (newState.status === AudioPlayerStatus.Paused && oldState.status !== AudioPlayerStatus.Paused) {
+				// Track paused
+				this.isPaused = true;
+				const track = this.queue.currentTrack;
+				if (track) {
+					this.debug(`[Player] Player paused on track: ${track.title}`);
+					this.emit("playerPause", track);
+				}
+			} else if (newState.status !== AudioPlayerStatus.Paused && oldState.status === AudioPlayerStatus.Paused) {
+				// Track resumed
+				this.isPaused = false;
+				const track = this.queue.currentTrack;
+				if (track) {
+					this.debug(`[Player] Player resumed on track: ${track.title}`);
+					this.emit("playerResume", track);
+				}
+			} else if (newState.status === AudioPlayerStatus.AutoPaused) {
+				this.debug(`[Player] AudioPlayerStatus.AutoPaused`);
+			} else if (newState.status === AudioPlayerStatus.Buffering) {
+				this.debug(`[Player] AudioPlayerStatus.Buffering`);
 			}
 		});
-
-		this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
-			this.debug(`[Player] AudioPlayerStatus.Idle`);
-			this.isPlaying = false;
-			this.isPaused = false;
-			const track = this.queue.currentTrack;
-
-			if (track) {
-				this.debug(`[Player] Track ended: ${track.title}`);
-				this.emit("trackEnd", track);
-			}
-
-			this.playNext();
-		});
-
-		this.audioPlayer.on(AudioPlayerStatus.Paused, () => {
-			this.debug(`[Player] AudioPlayerStatus.Paused`);
-			this.isPaused = true;
-			const track = this.queue.currentTrack;
-			if (track) {
-				this.debug(`[Player] Player paused on track: ${track.title}`);
-				this.emit("playerPause", track);
-			}
-		});
-
 		this.audioPlayer.on("error", (error) => {
 			this.debug(`[Player] AudioPlayer error:`, error);
 			this.emit("playerError", error, this.queue.currentTrack || undefined);
 			this.playNext();
+		});
+
+		this.audioPlayer.on("debug", (...args) => {
+			if (this.manager.debugEnabled) {
+				this.emit("debug", ...args);
+			}
 		});
 	}
 
@@ -128,33 +153,35 @@ export class Player extends EventEmitter {
 	async connect(channel: VoiceChannel): Promise<VoiceConnection> {
 		try {
 			this.debug(`[Player] Connecting to voice channel: ${channel.id}`);
-			this.connection = joinVoiceChannel({
+			const connection = joinVoiceChannel({
 				channelId: channel.id,
 				guildId: channel.guildId,
 				adapterCreator: channel.guild.voiceAdapterCreator as any,
 			});
 
-			this.connection.on(VoiceConnectionStatus.Disconnected, () => {
+			await entersState(connection, VoiceConnectionStatus.Ready, 50_000);
+			this.connection = connection;
+
+			connection.on(VoiceConnectionStatus.Disconnected, () => {
 				this.debug(`[Player] VoiceConnectionStatus.Disconnected`);
 				this.destroy();
 			});
 
-			this.connection.on("error", (error) => {
+			connection.on("error", (error) => {
 				this.debug(`[Player] Voice connection error:`, error);
 				this.emit("connectionError", error);
 			});
-
-			this.connection.subscribe(this.audioPlayer);
+			connection.subscribe(this.audioPlayer);
 
 			if (this.leaveTimeout) {
 				clearTimeout(this.leaveTimeout);
 				this.leaveTimeout = null;
 			}
-
 			return this.connection;
 		} catch (error) {
 			this.debug(`[Player] Connection error:`, error);
 			this.emit("connectionError", error as Error);
+			this.connection?.destroy();
 			throw error;
 		}
 	}
@@ -340,6 +367,9 @@ export class Player extends EventEmitter {
 
 			this.debug(`[Player] Playing resource for track: ${track.title}`);
 			this.audioPlayer.play(this.currentResource);
+
+			await entersState(this.audioPlayer, AudioPlayerStatus.Playing, 5_000);
+
 			return true;
 		} catch (error) {
 			this.debug(`[Player] playNext error:`, error);

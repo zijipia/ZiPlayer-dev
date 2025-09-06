@@ -34,7 +34,7 @@
 		"ffmpeg-static": "^5.2.0",
 		"libsodium-wrappers": "^0.7.15",
 		"opusscript": "^0.1.1",
-		"ziplayer": "^0.0.2"
+		"ziplayer": "file:../../core"
 	},
 	"devDependencies": {
 		"@types/node": "^20.0.0",
