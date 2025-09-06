@@ -1,7 +1,25 @@
 {
 	"name": "@ziplayer/plugin",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"description": "A modular Discord voice player with plugin system",
+	"keywords": [
+		"ZiPlayer",
+		"@ziplayer/plugin",
+		"discord",
+		"music",
+		"player",
+		"voice"
+	],
+	"homepage": "https://github.com/ZiProject/ZiPlayer#readme",
+	"bugs": {
+		"url": "https://github.com/ZiProject/ZiPlayer/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ZiProject/ZiPlayer.git"
+	},
+	"license": "MIT",
+	"author": "Ziji",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"scripts": {
@@ -12,7 +30,7 @@
 	"dependencies": {
 		"@zibot/scdl": "^0.0.5",
 		"youtubei.js": "^15.0.1",
-		"ziplayer": "^0.0.1"
+		"ziplayer": "^0.0.2"
 	},
 	"devDependencies": {
 		"@types/node": "^20.0.0",
