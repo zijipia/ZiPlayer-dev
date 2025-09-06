@@ -45,7 +45,7 @@ export class SoundCloudPlugin extends BasePlugin {
 		await this.ready;
 
 		try {
-			if (query.includes("soundcloud.com")) {
+			if (isValidSoundCloudHost(query)) {
 				try {
 					const info = await this.client.getTrackDetails(query);
 					const track: Track = {
