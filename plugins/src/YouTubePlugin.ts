@@ -32,7 +32,17 @@ export class YouTubePlugin extends BasePlugin {
 	canHandle(query: string): boolean {
 		const q = query.toLowerCase();
 		const isUrl = q.startsWith("http://") || q.startsWith("https://");
-		return q.includes("youtube.com") || q.includes("youtu.be") || (!isUrl && q.includes("youtube"));
+		if (isUrl) {
+			try {
+				const parsed = new URL(query);
+				const allowedHosts = ["youtube.com", "www.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"];
+				return allowedHosts.includes(parsed.hostname.toLowerCase());
+			} catch (e) {
+				return false;
+			}
+		} else {
+			return q.includes("youtube");
+		}
 	}
 
 	validate(url: string): boolean {
