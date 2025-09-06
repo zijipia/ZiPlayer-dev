@@ -2,31 +2,34 @@
 
 Thanks for your interest in improving **ZiPlayer** — a modular Discord voice player with a plugin system for `@discordjs/voice`.
 
-This guide explains how to set up your dev environment, propose changes, add new plugins, file issues, and open pull requests. Welcome aboard! 🧑‍💻🎧
+This guide explains how to set up your dev environment, propose changes, add new plugins, file issues, and open pull requests.
+Welcome aboard! 🧑‍💻🎧
 
 ---
 
 ## Table of contents
 
-* [Code of Conduct](#code-of-conduct)
-* [Ways to contribute](#ways-to-contribute)
-* [Project structure](#project-structure)
-* [Development setup](#development-setup)
-* [Running locally](#running-locally)
-* [Commit style & branches](#commit-style--branches)
-* [Pull request checklist](#pull-request-checklist)
-* [Adding a new plugin](#adding-a-new-plugin)
-* [Testing](#testing)
-* [Documentation](#documentation)
-* [Release & versioning](#release--versioning)
-* [Security](#security)
-* [License](#license)
+- [Code of Conduct](#code-of-conduct)
+- [Ways to contribute](#ways-to-contribute)
+- [Project structure](#project-structure)
+- [Development setup](#development-setup)
+- [Running locally](#running-locally)
+- [Commit style & branches](#commit-style--branches)
+- [Pull request checklist](#pull-request-checklist)
+- [Adding a new plugin](#adding-a-new-plugin)
+- [Testing](#testing)
+- [Documentation](#documentation)
+- [Release & versioning](#release--versioning)
+- [Security](#security)
+- [License](#license)
 
 ---
 
 ## Code of Conduct
 
-By participating in this project, you agree to uphold a respectful community. We follow the [Contributor Covenant](https://www.contributor-covenant.org/) Code of Conduct. If this repository adds a dedicated `CODE_OF_CONDUCT.md`, that document is authoritative.
+By participating in this project, you agree to uphold a respectful community. We follow the
+[Contributor Covenant](https://www.contributor-covenant.org/) Code of Conduct. If this repository adds a dedicated
+`CODE_OF_CONDUCT.md`, that document is authoritative.
 
 If you experience or witness unacceptable behavior, please open a confidential issue or contact a maintainer.
 
@@ -34,11 +37,11 @@ If you experience or witness unacceptable behavior, please open a confidential i
 
 ## Ways to contribute
 
-* **Bug reports:** Describe the environment, steps to reproduce, expected vs. actual behavior, and logs.
-* **Feature proposals:** Explain the problem, the user story, and a minimal API sketch if relevant.
-* **Docs & examples:** Improve README snippets, example bots, and in‑code JSDoc/tsdoc.
-* **Plugins:** Implement sources (e.g., YouTube, SoundCloud, Spotify, etc.) or utility plugins.
-* **Performance & DX:** Profiling, memory/GC improvements, build/dev ergonomics.
+- **Bug reports:** Describe the environment, steps to reproduce, expected vs. actual behavior, and logs.
+- **Feature proposals:** Explain the problem, the user story, and a minimal API sketch if relevant.
+- **Docs & examples:** Improve README snippets, example bots, and in‑code JSDoc/tsdoc.
+- **Plugins:** Implement sources (e.g., YouTube, SoundCloud, Spotify, etc.) or utility plugins.
+- **Performance & DX:** Profiling, memory/GC improvements, build/dev ergonomics.
 
 Before filing a feature request, please search existing issues to avoid duplicates.
 
@@ -64,10 +67,10 @@ root
 
 **Prerequisites**
 
-* **Node.js** LTS (≥ 18.x recommended; 20.x+ preferred)
-* **npm** (or **pnpm/yarn** if you prefer)
-* **FFmpeg** available on your PATH — some plugins need it
-* Optional per‑plugin tools (e.g., `yt-dlp`) if a plugin documents them
+- **Node.js** LTS (≥ 18.x recommended; 20.x+ preferred)
+- **npm** (or **pnpm/yarn** if you prefer)
+- **FFmpeg** available on your PATH — some plugins need it
+- Optional per‑plugin tools (e.g., `yt-dlp`) if a plugin documents them
 
 **1) Fork & clone**
 
@@ -111,6 +114,7 @@ The fastest way to validate changes is to run an example bot and play audio in a
    DISCORD_TOKEN=your_bot_token
    GUILD_ID=your_guild_id     # optional but often useful
    ```
+
 3. Start the example:
 
    ```bash
@@ -118,6 +122,7 @@ The fastest way to validate changes is to run an example bot and play audio in a
    npm install
    npm start        # or: npm run dev / npm run start:dev
    ```
+
 4. From a voice channel, use the example’s commands to play a track/playlist.
 
 > **Legal & Platform rules:** Ensure your bot and plugins respect Discord ToS and third‑party content policies.
@@ -137,27 +142,27 @@ We use **Conventional Commits** to keep a clean history and automate changelogs:
 
 **Branch names**
 
-* `feat/<short-topic>` — new features
-* `fix/<short-topic>` — bug fixes
-* `chore/<short-topic>` — tooling/infra
+- `feat/<short-topic>` — new features
+- `fix/<short-topic>` — bug fixes
+- `chore/<short-topic>` — tooling/infra
 
 ---
 
 ## Pull request checklist
 
-* [ ] PR title follows **Conventional Commits**
-* [ ] Linked to an issue (or explains the context/motivation clearly)
-* [ ] Focused change set (avoid mixing unrelated changes)
-* [ ] **Type‑safe**: no `any` unless justified with comments
-* [ ] Linted & formatted; no warnings on build
-* [ ] New/changed behavior covered by tests (where applicable)
-* [ ] Example(s) updated when the public API changes
-* [ ] No secrets or tokens in code or history
+- [ ] PR title follows **Conventional Commits**
+- [ ] Linked to an issue (or explains the context/motivation clearly)
+- [ ] Focused change set (avoid mixing unrelated changes)
+- [ ] **Type‑safe**: no `any` unless justified with comments
+- [ ] Linted & formatted; no warnings on build
+- [ ] New/changed behavior covered by tests (where applicable)
+- [ ] Example(s) updated when the public API changes
+- [ ] No secrets or tokens in code or history
 
 ### CI & reviews
 
-* All PRs must pass CI checks (build, typecheck, lint, tests).
-* At least **one maintainer review** is required before merging.
+- All PRs must pass CI checks (build, typecheck, lint, tests).
+- At least **one maintainer review** is required before merging.
 
 ---
 
@@ -167,19 +172,19 @@ ZiPlayer supports a **plugin architecture** so you can add new sources.
 
 ### Design principles
 
-* **Isolated**: avoid coupling to unrelated plugins.
-* **Non‑blocking**: network calls should be async; stream delivery should not block the event loop.
-* **Errors**: normalize errors and surface them via player events.
-* **Quality**: return rich metadata (title, url, duration, thumbnails if available).
+- **Isolated**: avoid coupling to unrelated plugins.
+- **Non‑blocking**: network calls should be async; stream delivery should not block the event loop.
+- **Errors**: normalize errors and surface them via player events.
+- **Quality**: return rich metadata (title, url, duration, thumbnails if available).
 
 ### Minimal plugin checklist
 
-* [ ] Exports a class with `name`, `version`
-* [ ] Implements `canHandle(query: string): boolean`
-* [ ] Implements `search(query: string, requestedBy: string)` → `{ tracks: Track[] }`
-* [ ] Implements `getStream(track: Track)` → `{ stream: Readable; type: "arbitrary" | "opus" | ... }`
-* [ ] Adds small docs in `plugins/<your-plugin>/README.md`
-* [ ] Provides a quick example under `examples/` (optional but helpful)
+- [ ] Exports a class with `name`, `version`
+- [ ] Implements `canHandle(query: string): boolean`
+- [ ] Implements `search(query: string, requestedBy: string)` → `{ tracks: Track[] }`
+- [ ] Implements `getStream(track: Track)` → `{ stream: Readable; type: "arbitrary" | "opus" | ... }`
+- [ ] Adds small docs in `plugins/<your-plugin>/README.md`
+- [ ] Provides a quick example under `examples/` (optional but helpful)
 
 ### Example skeleton (TypeScript)
 
@@ -216,18 +221,18 @@ export class MyPlugin extends BasePlugin {
 
 ## Testing
 
-* Unit tests should target deterministic behavior (queue ops, loop/auto‑play, events).
-* Consider **integration tests** for plugins with network I/O mocked.
-* Suggested scripts (add as needed):
+- Unit tests should target deterministic behavior (queue ops, loop/auto‑play, events).
+- Consider **integration tests** for plugins with network I/O mocked.
+- Suggested scripts (add as needed):
 
   ```json
   {
-    "scripts": {
-      "build": "tsc -b",
-      "lint": "eslint .",
-      "format": "prettier --check .",
-      "test": "vitest run"
-    }
+  	"scripts": {
+  		"build": "tsc -b",
+  		"lint": "eslint .",
+  		"format": "prettier --check .",
+  		"test": "vitest run"
+  	}
   }
   ```
 
@@ -235,22 +240,23 @@ export class MyPlugin extends BasePlugin {
 
 ## Documentation
 
-* Keep the root `README.md` concise; link to deeper docs in `docs/` or per‑package `README.md`.
-* Every public API symbol should have **tsdoc**.
-* Update the examples when behavior changes.
+- Keep the root `README.md` concise; link to deeper docs in `docs/` or per‑package `README.md`.
+- Every public API symbol should have **tsdoc**.
+- Update the examples when behavior changes.
 
 ---
 
 ## Release & versioning
 
-* We follow **Semantic Versioning** (SEMVER): `MAJOR.MINOR.PATCH`.
-* Maintainers publish to npm when meaningful changes land. Community PRs are bundled into regular releases.
+- We follow **Semantic Versioning** (SEMVER): `MAJOR.MINOR.PATCH`.
+- Maintainers publish to npm when meaningful changes land. Community PRs are bundled into regular releases.
 
 ---
 
 ## Security
 
-If you discover a security issue (e.g., arbitrary file writes, command injection in external binaries, or unsafe stream handling), **do not** open a public issue. Email a maintainer privately or open a security advisory.
+If you discover a security issue (e.g., arbitrary file writes, command injection in external binaries, or unsafe stream handling),
+**do not** open a public issue. Email a maintainer privately or open a security advisory.
 
 Please also avoid shipping API keys or tokens in examples, and ensure any temporary files are cleaned up.
 
