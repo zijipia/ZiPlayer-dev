@@ -276,10 +276,17 @@ export class YouTubePlugin extends BasePlugin {
 	private extractVideoId(input: string): string | null {
 		try {
 			const u = new URL(input);
-			if (u.hostname.includes("youtu.be")) {
+			const allowedShortHosts = ["youtu.be"];
+			const allowedLongHosts = [
+				"youtube.com",
+				"www.youtube.com",
+				"music.youtube.com",
+				"m.youtube.com",
+			];
+			if (allowedShortHosts.includes(u.hostname)) {
 				return u.pathname.split("/").filter(Boolean)[0] || null;
 			}
-			if (u.hostname.includes("youtube.com")) {
+			if (allowedLongHosts.includes(u.hostname)) {
 				// watch?v=, shorts/, embed/
 				if (u.searchParams.get("v")) return u.searchParams.get("v");
 				const path = u.pathname;
