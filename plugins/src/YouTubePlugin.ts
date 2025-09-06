@@ -36,8 +36,19 @@ export class YouTubePlugin extends BasePlugin {
 	}
 
 	validate(url: string): boolean {
-		const u = url.toLowerCase();
-		return u.includes("youtube.com") || u.includes("youtu.be");
+		try {
+			const parsed = new URL(url);
+			const allowedHosts = [
+				'youtube.com',
+				'www.youtube.com',
+				'music.youtube.com',
+				'youtu.be',
+				'www.youtu.be'
+			];
+			return allowedHosts.includes(parsed.hostname.toLowerCase());
+		} catch (e) {
+			return false;
+		}
 	}
 
 	async search(query: string, requestedBy: string): Promise<SearchResult> {

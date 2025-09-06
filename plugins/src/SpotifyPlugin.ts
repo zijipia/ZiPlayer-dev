@@ -16,7 +16,7 @@ export class SpotifyPlugin extends BasePlugin {
 		if (q.startsWith("spotify:")) return true;
 		try {
 			const u = new URL(q);
-			return u.hostname.includes("open.spotify.com");
+			return u.hostname === "open.spotify.com";
 		} catch {
 			return false;
 		}
@@ -26,7 +26,7 @@ export class SpotifyPlugin extends BasePlugin {
 		if (url.startsWith("spotify:")) return true;
 		try {
 			const u = new URL(url);
-			return u.hostname.includes("open.spotify.com");
+			return u.hostname === "open.spotify.com";
 		} catch {
 			return false;
 		}

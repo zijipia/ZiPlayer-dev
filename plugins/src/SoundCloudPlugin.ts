@@ -1,7 +1,22 @@
 import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
 
 const SoundCloud = require("@zibot/scdl");
+import { URL } from "url";
 
+const ALLOWED_SOUNDCLOUD_HOSTS = [
+    "soundcloud.com",
+    "www.soundcloud.com"
+];
+
+function isValidSoundCloudHost(maybeUrl: string): boolean {
+    try {
+        const parsed = new URL(maybeUrl);
+        return ALLOWED_SOUNDCLOUD_HOSTS.includes(parsed.hostname);
+    } catch {
+        // Not a valid URL, not handled as host-based
+        return false;
+    }
+}
 export class SoundCloudPlugin extends BasePlugin {
 	name = "soundcloud";
 	version = "1.0.0";
@@ -19,11 +34,14 @@ export class SoundCloudPlugin extends BasePlugin {
 	}
 
 	canHandle(query: string): boolean {
-		return query.includes("soundcloud.com") || (!query.startsWith("http") && !query.includes("youtube"));
+		if (query.startsWith("http")) {
+			return isValidSoundCloudHost(query);
+		}
+		return !query.includes("youtube");
 	}
 
 	validate(url: string): boolean {
-		return url.includes("soundcloud.com");
+		return isValidSoundCloudHost(url);
 	}
 
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
