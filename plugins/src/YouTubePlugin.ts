@@ -277,12 +277,7 @@ export class YouTubePlugin extends BasePlugin {
 		try {
 			const u = new URL(input);
 			const allowedShortHosts = ["youtu.be"];
-			const allowedLongHosts = [
-				"youtube.com",
-				"www.youtube.com",
-				"music.youtube.com",
-				"m.youtube.com",
-			];
+			const allowedLongHosts = ["youtube.com", "www.youtube.com", "music.youtube.com", "m.youtube.com"];
 			if (allowedShortHosts.includes(u.hostname)) {
 				return u.pathname.split("/").filter(Boolean)[0] || null;
 			}
