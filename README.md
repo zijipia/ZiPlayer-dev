@@ -102,7 +102,7 @@ const spotify = new SpotifyPlugin();
 ## Creating Custom Plugins
 
 ```typescript
-import { BasePlugin, Track, SearchResult, StreamInfo } from "@zibot/player";
+import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
 
 export class MyPlugin extends BasePlugin {
 	name = "myplugin";
