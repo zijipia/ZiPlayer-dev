@@ -1,5 +1,4 @@
-
-# @zibot/player
+# ziplayer
 
 A modular Discord voice player with plugin system for @discordjs/voice.
 
@@ -11,6 +10,7 @@ A modular Discord voice player with plugin system for @discordjs/voice.
 - 🎚️ **Volume control** - 0-200% volume range
 - ⏯️ **Playback control** - Play, pause, resume, stop, skip
 - 🔁 **Auto play** - Automatically replay the queue when it ends
+- 🔂 **Loop control** - Repeat a single track or the entire queue
 - 📊 **Progress bar** - Display playback progress with customizable icons
 - 🔔 **Event-driven** - Rich event system for all player actions
 - 🎭 **Multi-guild support** - Manage players across multiple Discord servers
@@ -19,103 +19,112 @@ A modular Discord voice player with plugin system for @discordjs/voice.
 ## Installation
 
 ```bash
-npm install @zibot/player @discordjs/voice discord.js
-
-# Optional dependencies for plugins:
-npm install ytdl-core youtube-sr          # YouTube plugin
-npm install soundcloud-scraper            # SoundCloud plugin  
-npm install spotify-web-api-node          # Spotify plugin
+npm install ziplayer @ziplayer/plugin @discordjs/voice discord.js
 ```
 
 ## Quick Start
 
 ```typescript
-import { PlayerManager, YouTubePlugin, SoundCloudPlugin } from '@zibot/player';
+import { PlayerManager } from "ziplayer";
+import { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin } from "@ziplayer/plugin";
 
+const soundcloudPlugin = new SoundCloudPlugin();
 const youtubePlugin = new YouTubePlugin();
-const soundCloudPlugin = new SoundCloudPlugin();
+const spotifyPlugin = new SpotifyPlugin();
 
 // Create player manager with YouTube and SoundCloud plugins
 const manager = new PlayerManager({
-  plugins: [soundCloudPlugin, youtubePlugin],
+	plugins: [soundcloudPlugin, youtubePlugin, spotifyPlugin],
 });
 
 // Create player
 const player = manager.create(guildId, {
-  leaveOnEnd: true,
-  leaveTimeout: 30000,
-  userdata: { channel: textChannel }, // store channel for events
+	leaveOnEnd: true,
+	leaveTimeout: 30000,
+	userdata: { channel: textChannel }, // store channel for events
 });
 
 // Connect and play
 await player.connect(voiceChannel);
-await player.play('Never Gonna Give You Up', userId);
+await player.play("Never Gonna Give You Up", userId);
 
 // Play a full YouTube playlist
-await player.play('https://www.youtube.com/playlist?list=PL123', userId);
+await player.play("https://www.youtube.com/playlist?list=PL123", userId);
 
 // Enable autoplay
 player.queue.autoPlay(true);
 
-// Play a full SoundCloud playlist
-await player.play('https://soundcloud.com/artist/sets/playlist', userId);
+// Loop the entire queue
+player.loop("queue");
 
+// Play a full SoundCloud playlist
+await player.play("https://soundcloud.com/artist/sets/playlist", userId);
 
 // Events
-player.on('willPlay', (track) => {
-  console.log(`Up next: ${track.title}`);
+player.on("willPlay", (track) => {
+	console.log(`Up next: ${track.title}`);
 });
-player.on('trackStart', (track) => {
-  console.log(`Now playing: ${track.title}`);
-  player.userdata?.channel?.send(`Now playing: ${track.title}`);
+player.on("trackStart", (track) => {
+	console.log(`Now playing: ${track.title}`);
+	player.userdata?.channel?.send(`Now playing: ${track.title}`);
 });
 ```
 
 ## Available Plugins
 
 ### YouTubePlugin
+
 Supports YouTube videos and playlists.
+
 ```typescript
-import { YouTubePlugin } from '@zibot/player';
+import { YouTubePlugin } from "@ziplayer/plugin";
 const youtube = new YouTubePlugin();
 ```
 
-### SoundCloudPlugin  
+### SoundCloudPlugin
+
 Supports SoundCloud tracks and playlists.
+
 ```typescript
-import { SoundCloudPlugin } from '@zibot/player';
+import { SoundCloudPlugin } from "@ziplayer/plugin";
 const soundcloud = new SoundCloudPlugin();
 ```
 
 ### SpotifyPlugin
+
 Supports Spotify tracks, albums, and playlists (requires fallback plugin for streaming).
+
 ```typescript
-import { SpotifyPlugin } from '@zibot/player';
-const spotify = new SpotifyPlugin(clientId, clientSecret, youtubePlugin);
+import { SpotifyPlugin } from "@ziplayer/plugin";
+const spotify = new SpotifyPlugin();
 ```
 
 ## Creating Custom Plugins
 
 ```typescript
-import { BasePlugin, Track, SearchResult, StreamInfo } from '@zibot/player';
+import { BasePlugin, Track, SearchResult, StreamInfo } from "@zibot/player";
 
 export class MyPlugin extends BasePlugin {
-  name = 'myplugin';
-  version = '1.0.0';
+	name = "myplugin";
+	version = "1.0.0";
 
-  canHandle(query: string): boolean {
-    return query.includes('mysite.com');
-  }
+	canHandle(query: string): boolean {
+		return query.includes("mysite.com");
+	}
 
-  async search(query: string, requestedBy: string): Promise<SearchResult> {
-    // Implement search logic
-    return { tracks: [/* ... */] };
-  }
+	async search(query: string, requestedBy: string): Promise<SearchResult> {
+		// Implement search logic
+		return {
+			tracks: [
+				/* ... */
+			],
+		};
+	}
 
-  async getStream(track: Track): Promise<StreamInfo> {
-    // Return audio stream
-    return { stream, type: 'arbitrary' };
-  }
+	async getStream(track: Track): Promise<StreamInfo> {
+		// Return audio stream
+		return { stream, type: "arbitrary" };
+	}
 }
 ```
 

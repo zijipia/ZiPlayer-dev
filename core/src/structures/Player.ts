@@ -13,7 +13,7 @@ import {
 
 import { VoiceChannel } from "discord.js";
 import { Readable } from "stream";
-import { Track, PlayerOptions, PlayerEvents, SourcePlugin, SearchResult, ProgressBarOptions } from "../types";
+import { Track, PlayerOptions, PlayerEvents, SourcePlugin, SearchResult, ProgressBarOptions, LoopMode } from "../types";
 import { Queue } from "./Queue";
 import { PluginManager } from "../plugins";
 
@@ -36,6 +36,7 @@ export class Player extends EventEmitter {
 	private leaveTimeout: NodeJS.Timeout | null = null;
 	private currentResource: AudioResource | null = null;
 	private volumeInterval: NodeJS.Timeout | null = null;
+	private skipLoop = false;
 
 	private withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
 		const timeout = this.options.extractorTimeout ?? 15000;
@@ -246,7 +247,8 @@ export class Player extends EventEmitter {
 
 	private async playNext(): Promise<boolean> {
 		this.debug(`[Player] playNext called`);
-		const track = this.queue.next();
+		const track = this.queue.next(this.skipLoop);
+		this.skipLoop = false;
 		if (!track) {
 			if (this.queue.autoPlay()) {
 				const willnext = this.queue.willNextTrack();
@@ -383,9 +385,14 @@ export class Player extends EventEmitter {
 	skip(): boolean {
 		this.debug(`[Player] skip called`);
 		if (this.isPlaying || this.isPaused) {
+			this.skipLoop = true;
 			return this.audioPlayer.stop();
 		}
 		return !!this.playNext();
+	}
+
+	loop(mode?: LoopMode): LoopMode {
+		return this.queue.loop(mode);
 	}
 
 	setVolume(volume: number): boolean {

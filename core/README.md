@@ -10,6 +10,7 @@ A modular Discord voice player with plugin system for @discordjs/voice.
 - 🎚️ **Volume control** - 0-200% volume range
 - ⏯️ **Playback control** - Play, pause, resume, stop, skip
 - 🔁 **Auto play** - Automatically replay the queue when it ends
+- 🔂 **Loop control** - Repeat a single track or the entire queue
 - 📊 **Progress bar** - Display playback progress with customizable icons
 - 🔔 **Event-driven** - Rich event system for all player actions
 - 🎭 **Multi-guild support** - Manage players across multiple Discord servers
@@ -52,6 +53,9 @@ await player.play("https://www.youtube.com/playlist?list=PL123", userId);
 
 // Enable autoplay
 player.queue.autoPlay(true);
+
+// Loop the entire queue
+player.loop("queue");
 
 // Play a full SoundCloud playlist
 await player.play("https://soundcloud.com/artist/sets/playlist", userId);

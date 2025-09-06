@@ -52,6 +52,8 @@ export interface ProgressBarOptions {
 	progressChar?: string;
 }
 
+export type LoopMode = "off" | "track" | "queue";
+
 export interface PlayerEvents {
 	debug: [message: string, ...args: any[]];
 	willPlay: [track: Track, upcomingTracks: Track[]];

@@ -1,10 +1,11 @@
-import { Track } from "../types";
+import { Track, LoopMode } from "../types";
 
 export class Queue {
 	private tracks: Track[] = [];
 	private current: Track | null = null;
 	private history: Track[] = [];
 	private _autoPlay = false;
+	private _loop: LoopMode = "off";
 	private willnext: Track | null = null;
 
 	add(track: Track): void {
@@ -20,14 +21,22 @@ export class Queue {
 		return this.tracks.splice(index, 1)[0];
 	}
 
-	next(): Track | null {
+	next(ignoreLoop = false): Track | null {
 		if (this.current) {
+			if (this._loop === "track" && !ignoreLoop) {
+				return this.current;
+			}
 			this.history.push(this.current);
 			if (this.history.length > 200) {
 				this.history.shift();
 			}
 		}
 		this.current = this.tracks.shift() || null;
+		if (!this.current && this._loop === "queue" && this.history.length > 0 && !ignoreLoop) {
+			this.tracks = [...this.history];
+			this.history = [];
+			this.current = this.tracks.shift() || null;
+		}
 		return this.current;
 	}
 
@@ -40,6 +49,13 @@ export class Queue {
 			this._autoPlay = value;
 		}
 		return this._autoPlay;
+	}
+
+	loop(mode?: LoopMode): LoopMode {
+		if (mode) {
+			this._loop = mode;
+		}
+		return this._loop;
 	}
 
 	shuffle(): void {
