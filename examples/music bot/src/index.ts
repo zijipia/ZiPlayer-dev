@@ -1,6 +1,9 @@
 import { PlayerManager } from "ziplayer";
 import { Client, GatewayIntentBits } from "discord.js";
 import { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin } from "@ziplayer/plugin";
+import dotenv from "dotenv";
+dotenv.config();
+
 const client = new Client({
 	intents: [
 		GatewayIntentBits.Guilds,
@@ -65,7 +68,6 @@ client.on("messageCreate", async (message) => {
 			} else {
 				message.reply("❌ Failed to add song to queue");
 			}
-			player.queue.autoPlay(true);
 		} catch (error) {
 			console.error("Play command error:", error);
 			message.reply("❌ An error occurred while trying to play the song");
@@ -165,16 +167,6 @@ client.on("messageCreate", async (message) => {
 		message.reply(`🔁 Autoplay is now ${!autoPlay ? "enabled" : "disabled"}`);
 	}
 
-	if (command === "loop") {
-		const player = manager.get(message.guild.id);
-		if (!player) return message.reply("No music is playing!");
-		const mode = args[0] as "track" | "queue" | "off" | undefined;
-		const current = player.loop();
-		const nextMode = mode ?? (current === "off" ? "track" : current === "track" ? "queue" : "off");
-		player.loop(nextMode);
-		message.reply(`🔁 Loop mode set to ${nextMode}`);
-	}
-
 	if (command === "status") {
 		const player = manager.get(message.guild.id);
 		if (!player) return message.reply("No music is playing!");
@@ -224,8 +216,20 @@ manager.on("playerError", (player, error, track) => {
 	}
 });
 
+manager.on("willPlay", (player, track, upcoming) => {
+	console.log(
+		`Will play next in guild ${player.guildId}: ${track.title}, Upcoming: ${upcoming
+			.map((t: { title: string }) => t.title)
+			.join(", ")}`,
+	);
+	player.userdata.textChannel.send(
+		`⏭️ Up next: **${track.title}**\n
+   ${upcoming.map((t: { title: string }) => t.title).join("\n")}`,
+	);
+});
+
 manager.on("debug", console.log);
-client.login("YOUR_BOT_TOKEN");
+client.login(process.env.DISCORD_TOKEN);
 
 client.on("ready", () => {
 	console.log(`Logged in as ${client.user?.tag}`);
