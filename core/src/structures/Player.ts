@@ -74,6 +74,8 @@ export class Player extends EventEmitter {
 			volume: 100,
 			quality: "high",
 			extractorTimeout: 50000,
+			selfDeaf: true,
+			selfMute: false,
 			...options,
 		};
 
@@ -157,6 +159,8 @@ export class Player extends EventEmitter {
 				channelId: channel.id,
 				guildId: channel.guildId,
 				adapterCreator: channel.guild.voiceAdapterCreator as any,
+				selfDeaf: this.options.selfDeaf ?? true,
+				selfMute: this.options.selfMute ?? false,
 			});
 
 			await entersState(connection, VoiceConnectionStatus.Ready, 50_000);
@@ -188,19 +192,28 @@ export class Player extends EventEmitter {
 
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		this.debug(`[Player] Search called with query: ${query}, requestedBy: ${requestedBy}`);
-		const plugin = this.pluginManager.findPlugin(query);
-		if (!plugin) {
-			this.debug(`[Player] No plugin found to handle: ${query}`);
-			throw new Error(`No plugin found to handle: ${query}`);
+		const plugins = this.pluginManager.getAll();
+		let lastError: any = null;
+
+		for (const p of plugins) {
+			try {
+				this.debug(`[Player] Trying plugin for search: ${p.name}`);
+				const res = await this.withTimeout(p.search(query, requestedBy), `Search operation timed out for ${p.name}`);
+				if (res && Array.isArray(res.tracks) && res.tracks.length > 0) {
+					this.debug(`[Player] Plugin '${p.name}' returned ${res.tracks.length} tracks`);
+					return res;
+				}
+				this.debug(`[Player] Plugin '${p.name}' returned no tracks`);
+			} catch (error) {
+				lastError = error;
+				this.debug(`[Player] Search via plugin '${p.name}' failed:`, error);
+				// Continue to next plugin
+			}
 		}
 
-		try {
-			return await this.withTimeout(plugin.search(query, requestedBy), "Search operation timed out");
-		} catch (error) {
-			this.debug(`[Player] Search error:`, error);
-			this.emit("playerError", error as Error);
-			throw error;
-		}
+		this.debug(`[Player] No plugins returned results for query: ${query}`);
+		if (lastError) this.emit("playerError", lastError as Error);
+		throw new Error(`No plugin found to handle: ${query}`);
 	}
 
 	async play(query: string | Track, requestedBy?: string): Promise<boolean> {

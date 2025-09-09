@@ -1,6 +1,6 @@
 import { VoiceConnection } from "@discordjs/voice";
-import { VoiceChannel } from "discord.js";
 import { Readable } from "stream";
+import { Player } from "../structures/Player";
 
 export interface Track {
 	id: string;
@@ -34,6 +34,8 @@ export interface PlayerOptions {
 	leaveTimeout?: number;
 	volume?: number;
 	quality?: "high" | "low";
+	selfDeaf?: boolean;
+	selfMute?: boolean;
 	/**
 	 * Timeout in milliseconds for plugin operations (search, streaming, etc.)
 	 * to prevent long-running tasks from blocking the player.
@@ -42,8 +44,12 @@ export interface PlayerOptions {
 	userdata?: Record<string, any>;
 }
 
+export type SourcePluginCtor<T extends SourcePlugin = SourcePlugin> = new (...args: any[]) => T;
+export type SourcePluginLike = SourcePlugin | SourcePluginCtor;
+
 export interface PlayerManagerOptions {
-	plugins?: SourcePlugin[];
+	plugins?: SourcePluginLike[];
+	extensions?: any[];
 }
 
 export interface ProgressBarOptions {
@@ -81,4 +87,13 @@ export interface SourcePlugin {
 	getRelatedTracks?(track: string | number, opts?: { limit?: number; offset?: number }): Promise<Track[]>;
 	validate?(url: string): boolean;
 	extractPlaylist?(url: string, requestedBy: string): Promise<Track[]>;
+}
+
+// Extension interfaces
+export interface SourceExtension {
+	name: string;
+	version: string;
+	connection?: VoiceConnection;
+	player: Player | null;
+	active(alas: any): boolean;
 }

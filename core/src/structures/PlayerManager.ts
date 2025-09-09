@@ -5,6 +5,7 @@ import { PlayerManagerOptions, PlayerOptions, Track, SourcePlugin } from "../typ
 export class PlayerManager extends EventEmitter {
 	private players: Map<string, Player> = new Map();
 	private plugins: SourcePlugin[];
+	private extensions: any[];
 	private B_debug: boolean = false;
 
 	private debug(message?: any, ...optionalParams: any[]): void {
@@ -18,7 +19,21 @@ export class PlayerManager extends EventEmitter {
 
 	constructor(options: PlayerManagerOptions = {}) {
 		super();
-		this.plugins = options.plugins || [];
+		this.plugins = [];
+		const provided = options.plugins || [];
+		for (const p of provided as any[]) {
+			try {
+				if (p && typeof p === "object") {
+					this.plugins.push(p as SourcePlugin);
+				} else if (typeof p === "function") {
+					const instance = new (p as any)();
+					this.plugins.push(instance as SourcePlugin);
+				}
+			} catch (e) {
+				this.debug(`[PlayerManager] Failed to init plugin:`, e);
+			}
+		}
+		this.extensions = options.extensions || [];
 	}
 
 	private resolveGuildId(guildOrId: string | { id: string }): string {
@@ -36,6 +51,30 @@ export class PlayerManager extends EventEmitter {
 		this.debug(`[PlayerManager] Creating player for guildId: ${guildId}`);
 		const player = new Player(guildId, options, this);
 		this.plugins.forEach((plugin) => player.addPlugin(plugin));
+
+		try {
+			for (const ext of this.extensions) {
+				let instance: any = ext;
+				try {
+					if (typeof ext === "function") {
+						instance = new (ext as any)(player);
+					}
+				} catch {}
+
+				if (instance && typeof instance === "object") {
+					try {
+						if ("player" in instance && !instance.player) instance.player = player;
+						if (typeof instance.active === "function") {
+							instance.active({ manager: this, player });
+						}
+					} catch (e) {
+						this.debug(`[PlayerManager] Extension activation error:`, e);
+					}
+				}
+			}
+		} catch (e) {
+			this.debug(`[PlayerManager] Extensions activation failed:`, e);
+		}
 
 		// Forward all player events
 		player.on("willPlay", (track, tracks) => this.emit("willPlay", player, track, tracks));

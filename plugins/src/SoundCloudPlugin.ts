@@ -31,10 +31,17 @@ export class SoundCloudPlugin extends BasePlugin {
 	}
 
 	canHandle(query: string): boolean {
-		if (query.startsWith("http")) {
+		const q = (query || "").trim().toLowerCase();
+		// Handle only SoundCloud URLs directly
+		if (q.startsWith("http")) {
 			return isValidSoundCloudHost(query);
 		}
-		return !query.includes("youtube");
+		// Avoid intercepting explicit patterns for other extractors (e.g., TTS)
+		if (q.startsWith("tts:") || q.startsWith("say ")) return false;
+		// Heuristic: prefer SoundCloud for generic text when it mentions soundcloud
+		if (q.includes("soundcloud")) return true;
+		// Otherwise, do not greedily claim generic queries
+		return false;
 	}
 
 	validate(url: string): boolean {

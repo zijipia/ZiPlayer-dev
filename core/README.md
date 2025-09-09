@@ -1,3 +1,5 @@
+<img width="1244" height="305" alt="logo" src="https://github.com/user-attachments/assets/c8181e90-fdc9-4e08-8fe4-b4419cb8a25b" />
+
 # ziplayer
 
 A modular Discord voice player with plugin system for @discordjs/voice.
@@ -102,7 +104,7 @@ const spotify = new SpotifyPlugin();
 ## Creating Custom Plugins
 
 ```typescript
-import { BasePlugin, Track, SearchResult, StreamInfo } from "@zibot/player";
+import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
 
 export class MyPlugin extends BasePlugin {
 	name = "myplugin";
