@@ -6,6 +6,27 @@ import axios from "axios";
 export interface TTSPluginOptions {
 	defaultLang?: string; // e.g., "vi" | "en"
 	slow?: boolean;
+	/**
+	 * Optional custom TTS hook. If provided, it will be used to
+	 * create the audio stream for the given text instead of the
+	 * built-in Google TTS wrapper.
+	 *
+	 * Return one of:
+	 * - Node Readable (preferred)
+	 * - HTTP(S) URL string or URL object
+	 * - Buffer / Uint8Array / ArrayBuffer
+	 */
+	createStream?: (
+		text: string,
+		ctx?: { lang: string; slow: boolean; track?: Track },
+	) =>
+		| Promise<Readable | string | URL | Buffer | Uint8Array | ArrayBuffer>
+		| Readable
+		| string
+		| URL
+		| Buffer
+		| Uint8Array
+		| ArrayBuffer;
 }
 
 interface TTSConfig {
@@ -17,13 +38,14 @@ interface TTSConfig {
 export class TTSPlugin extends BasePlugin {
 	name = "tts";
 	version = "1.0.0";
-	private opts: Required<TTSPluginOptions>;
+	private opts: { defaultLang: string; slow: boolean; createStream?: TTSPluginOptions["createStream"] };
 
 	constructor(opts?: TTSPluginOptions) {
 		super();
 		this.opts = {
 			defaultLang: opts?.defaultLang || "vi",
 			slow: !!opts?.slow,
+			createStream: opts?.createStream,
 		};
 	}
 
@@ -58,6 +80,13 @@ export class TTSPlugin extends BasePlugin {
 
 	async getStream(track: Track): Promise<StreamInfo> {
 		const cfg = this.extractConfig(track);
+
+		if (this.opts.createStream && typeof this.opts.createStream === "function") {
+			const out = await this.opts.createStream(cfg.text, { lang: cfg.lang, slow: cfg.slow, track });
+			const stream = await this.toReadable(out);
+			return { stream, type: "arbitrary", metadata: { provider: "custom" } };
+		}
+
 		const urls = getTTSUrls(cfg.text, { lang: cfg.lang, slow: cfg.slow });
 		if (!urls || urls.length === 0) {
 			throw new Error("TTS returned no audio URLs");
@@ -70,6 +99,22 @@ export class TTSPlugin extends BasePlugin {
 		const merged = Buffer.concat(parts);
 		const stream = Readable.from([merged]);
 		return { stream, type: "arbitrary", metadata: { size: merged.length } };
+	}
+
+	private async toReadable(out: Readable | string | URL | Buffer | Uint8Array | ArrayBuffer): Promise<Readable> {
+		if (out instanceof Readable) return out;
+		if (typeof out === "string" || out instanceof URL) {
+			const url = out instanceof URL ? out.toString() : out;
+			if (/^https?:\/\//i.test(url)) {
+				const res = await axios.get(url, { responseType: "stream" });
+				return res.data as unknown as Readable;
+			}
+			return Readable.from([Buffer.from(url)]);
+		}
+		if (out instanceof Buffer) return Readable.from([out]);
+		if (out instanceof Uint8Array) return Readable.from([Buffer.from(out)]);
+		if (out instanceof ArrayBuffer) return Readable.from([Buffer.from(out)]);
+		throw new Error("Unsupported return type from createStream");
 	}
 
 	private parseQuery(query: string): TTSConfig {

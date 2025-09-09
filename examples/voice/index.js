@@ -1,6 +1,5 @@
 require("dotenv").config();
 
-// Monorepo demo: resolve local packages
 const { PlayerManager } = require("../../core/dist");
 const { Client, GatewayIntentBits } = require("discord.js");
 const { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin, TTSPlugin } = require("../../plugins/dist");

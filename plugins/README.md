@@ -107,6 +107,22 @@ await player.play("tts:en:1:good morning", requestedBy);
 Note: Please comply with the service’s terms and provide your own quotas. The wrapper is intended for lightweight usage and may
 change without notice.
 
+Advanced: custom TTS provider
+
+You can override audio generation by passing a `createStream` function. It receives the text and context and can return a Node `Readable`, an HTTP(S) URL string, or a `Buffer`.
+
+```ts
+const tts = new TTSPlugin({
+  defaultLang: "vi",
+  async createStream(text, ctx) {
+    // Example: integrate with Azure, CAMB.AI, etc.
+    // Return a URL and the plugin will stream it
+    const url = await myTTSService(text, { lang: ctx?.lang, slow: ctx?.slow });
+    return url; // or Readable / Buffer
+  },
+});
+```
+
 ## Writing Your Own Plugin
 
 Plugins implement the `BasePlugin` contract from `ziplayer`:
