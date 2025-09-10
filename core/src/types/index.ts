@@ -42,6 +42,13 @@ export interface PlayerOptions {
 	 */
 	extractorTimeout?: number;
 	userdata?: Record<string, any>;
+	/**
+	 * Optional per-player extension selection. When provided, only these
+	 * extensions will be activated for the created player.
+	 * - Provide instances or constructors to use them explicitly
+	 * - Or provide names (string) to select from manager-registered extensions
+	 */
+	extensions?: any[] | string[];
 }
 
 export type SourcePluginCtor<T extends SourcePlugin = SourcePlugin> = new (...args: any[]) => T;

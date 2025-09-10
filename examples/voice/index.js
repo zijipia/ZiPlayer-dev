@@ -56,6 +56,8 @@ client.on("messageCreate", async (message) => {
 		const queue = player.create(message.guild.id, {
 			userdata: { channel: message.channel },
 			selfDeaf: true,
+			// Choose extensions for this player (by name or instances)
+			// extensions: ["voiceExt"],
 		});
 		try {
 			if (!queue.connection) await queue.connect(message.member.voice.channel);

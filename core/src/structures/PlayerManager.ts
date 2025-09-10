@@ -52,28 +52,42 @@ export class PlayerManager extends EventEmitter {
 		const player = new Player(guildId, options, this);
 		this.plugins.forEach((plugin) => player.addPlugin(plugin));
 
-		try {
-			for (const ext of this.extensions) {
-				let instance: any = ext;
-				try {
-					if (typeof ext === "function") {
-						instance = new (ext as any)(player);
-					}
-				} catch {}
+		let extsToActivate: any[] = [];
+		const optExts = (options as any)?.extensions as any[] | string[] | undefined;
+		if (Array.isArray(optExts)) {
+			if (optExts.length === 0) {
+				extsToActivate = [];
+			} else if (typeof optExts[0] === "string") {
+				const wanted = new Set(optExts as string[]);
+				extsToActivate = this.extensions.filter((ext) => {
+					const name = typeof ext === "function" ? ext.name : ext?.name;
+					return !!name && wanted.has(name);
+				});
+			} else {
+				extsToActivate = optExts;
+			}
+		}
 
-				if (instance && typeof instance === "object") {
+		for (const ext of extsToActivate) {
+			let instance = ext;
+			if (typeof ext === "function") {
+				try {
+					instance = new ext(player);
+				} catch (e) {
+					this.debug(`[PlayerManager] Extension constructor error:`, e);
+					continue;
+				}
+			}
+			if (instance && typeof instance === "object") {
+				if ("player" in instance && !instance.player) instance.player = player;
+				if (typeof instance.active === "function") {
 					try {
-						if ("player" in instance && !instance.player) instance.player = player;
-						if (typeof instance.active === "function") {
-							instance.active({ manager: this, player });
-						}
+						instance.active({ manager: this, player });
 					} catch (e) {
 						this.debug(`[PlayerManager] Extension activation error:`, e);
 					}
 				}
 			}
-		} catch (e) {
-			this.debug(`[PlayerManager] Extensions activation failed:`, e);
 		}
 
 		// Forward all player events

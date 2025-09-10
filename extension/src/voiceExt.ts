@@ -4,6 +4,16 @@ const { Transform } = require("stream");
 const prism = require("prism-media");
 const axios = require("axios");
 
+type OnVoiceChangeHook = (ctx: {
+	userId: string;
+	channelId: string;
+	guildId: string;
+	player: Player | null;
+	manager?: PlayerManager;
+	client?: any;
+	current: SpeechOptions;
+}) => Promise<Partial<SpeechOptions> | void> | Partial<SpeechOptions> | void;
+
 interface SpeechOptions {
 	ignoreBots: boolean;
 	focusUser?: string;
@@ -13,6 +23,8 @@ interface SpeechOptions {
 	profanityFilter?: boolean;
 	// How long to wait after silence before sending to STT (ms)
 	postSilenceDelayMs?: number;
+	// Middleware-like hook to adjust options per speaking session
+	onVoiceChange?: OnVoiceChangeHook;
 }
 
 class PcmStream extends Transform {
@@ -63,7 +75,6 @@ export class voiceExt extends BaseExtension {
 		} as SpeechOptions;
 	}
 
-	// Auto-wire lifecycle and capture manager
 	active(alas: any): boolean {
 		if (alas?.player && !this.player) this.player = alas.player;
 		const player = this.player;
@@ -74,7 +85,6 @@ export class voiceExt extends BaseExtension {
 
 		if (!player) return false;
 
-		// Wrap connect to auto-attach after joining voice
 		const anyPlayer: any = player as any;
 		if (!anyPlayer.__voiceExtWrappedConnect) {
 			anyPlayer.__voiceExtWrappedConnect = true;
@@ -90,7 +100,6 @@ export class voiceExt extends BaseExtension {
 			};
 		}
 
-		// If already connected, try attaching now
 		if ((player as any).connection) {
 			try {
 				this.attach(this.client);
@@ -157,6 +166,24 @@ export class voiceExt extends BaseExtension {
 				}
 			}
 
+			// Prepare a per-session options override via onVoiceChange (non-blocking)
+			const channelId = String(connection?.joinConfig?.channelId ?? "");
+			const guildId = String(this.player?.guildId ?? "");
+			const pendingOverrides = Promise.resolve(
+				this.speechOptions?.onVoiceChange?.({
+					userId,
+					channelId,
+					guildId,
+					player: this.player,
+					manager: this.manager,
+					client: this.client,
+					current: this.speechOptions,
+				}),
+			).catch((err) => {
+				this.debug(`onVoiceChange error: ${err?.message || err}`);
+				return undefined;
+			});
+
 			const opusStream = connection.receiver.subscribe(userId, {
 				end: {
 					// EndBehaviorType.AfterSilence === 1
@@ -170,19 +197,22 @@ export class voiceExt extends BaseExtension {
 				.pipe(new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 }))
 				.pipe(new PcmStream())
 				.on("data", (d: Buffer) => chunks.push(d))
-				.on("end", () => {
-					const delay = this.speechOptions.postSilenceDelayMs ?? 2000;
+				.on("end", async () => {
+					const overrides = (await pendingOverrides) || {};
+					const effective = { ...this.speechOptions, ...overrides } as SpeechOptions;
+					const delay = effective.postSilenceDelayMs ?? 2000;
 					this.debug(`Stopped speaking. Waiting ${delay}ms before sending to Google Speech`);
-					setTimeout(() => this.processVoice(userId, chunks), delay);
+					setTimeout(() => this.processVoice(userId, chunks, effective), delay);
 				});
 		});
 	}
 
-	private async processVoice(userId: string, bufferData: Buffer[]) {
+	private async processVoice(userId: string, bufferData: Buffer[], effective?: SpeechOptions) {
+		const opts = effective ?? this.speechOptions;
 		const pcm = Buffer.concat(bufferData);
 		const durationSec = pcm.length / 48000 / 4; // 48kHz, 2ch, 16-bit
 
-		if (durationSec < this.speechOptions.minimalVoiceMessageDuration) {
+		if (durationSec < opts.minimalVoiceMessageDuration) {
 			this.debug(`Voice too short (${durationSec.toFixed(2)}s)`);
 			return;
 		}
@@ -193,7 +223,7 @@ export class voiceExt extends BaseExtension {
 		}
 
 		try {
-			const content = await this.resolveSpeechWithGoogleSpeechV2(pcm);
+			const content = await this.resolveSpeechWithGoogleSpeechV2(pcm, opts);
 			if (!content) {
 				this.debug("No speech recognized or empty response");
 				return;
@@ -242,10 +272,11 @@ export class voiceExt extends BaseExtension {
 		}
 	}
 
-	private async resolveSpeechWithGoogleSpeechV2(audioBuffer: Buffer): Promise<string> {
-		const key = this.speechOptions.key || process.env.GSPEECH_V2_KEY || "AIzaSyBOti4mM-6x9WDnZIjIeyEU21OpBXqWBgw";
-		const lang = this.speechOptions.lang || "vi-VN";
-		const profanityFilter = this.speechOptions.profanityFilter ? "1" : "0";
+	private async resolveSpeechWithGoogleSpeechV2(audioBuffer: Buffer, opts?: SpeechOptions): Promise<string> {
+		const use = opts ?? this.speechOptions;
+		const key = use.key || process.env.GSPEECH_V2_KEY;
+		const lang = use.lang || "vi-VN";
+		const profanityFilter = use.profanityFilter ? "1" : "0";
 
 		const monoBuffer = this.convertStereoToMono(audioBuffer);
 		this.debug(`Sending ${monoBuffer.length} bytes to Google Speech (lang=${lang})`);

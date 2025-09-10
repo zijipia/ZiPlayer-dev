@@ -36,7 +36,7 @@ TypeScript / ESM
 ```ts
 import { PlayerManager } from "ziplayer";
 import { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin } from "@ziplayer/plugin";
-import { voiceExt } from "@ziplayer/plugin";
+import { voiceExt } from "@ziplayer/extension";
 
 const manager = new PlayerManager({
 	plugins: [new SoundCloudPlugin(), new YouTubePlugin(), new SpotifyPlugin()],
@@ -97,6 +97,8 @@ type VoiceCreatePayload = {
 - lang: string – Google Speech language code (default: "vi-VN")
 - key?: string – Google Speech v2 API key (default: from `process.env.GSPEECH_V2_KEY`)
 - profanityFilter?: boolean – Enable profanity filtering (default: false)
+- onVoiceChange?: (ctx) => Partial<SpeechOptions> | void | Promise<Partial<SpeechOptions> | void> – Hook called on every
+  `speaking.start`; return overrides like `{ lang: "en-US" }` to apply per session.
 
 Initialize with options:
 
@@ -108,6 +110,20 @@ Or update after attaching:
 
 ```ts
 ext.attach(client, { focusUser: "123456789012345678" });
+```
+
+Per‑session overrides via `onVoiceChange` (e.g., switch language by user or guild):
+
+```ts
+new voiceExt(null, {
+	onVoiceChange: async ({ userId, guildId, current }) => {
+		// Example: force English for a specific guild, else keep current
+		if (guildId === "123456789012345678") return { lang: "en-US" };
+		// Example: user-specific override
+		if (userId === "999999999999999999") return { lang: "ja-JP" };
+		return; // no change
+	},
+});
 ```
 
 If you pass a Discord.js `client`, the payload will include resolved `user` and `channel` objects when possible.
