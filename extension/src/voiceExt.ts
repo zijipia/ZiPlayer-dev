@@ -25,6 +25,8 @@ interface SpeechOptions {
 	postSilenceDelayMs?: number;
 	// Middleware-like hook to adjust options per speaking session
 	onVoiceChange?: OnVoiceChangeHook;
+	// Optional custom speech resolver; receives mono 48kHz 16-bit PCM
+	resolveSpeech?: (monoBuffer: Buffer, opts: SpeechOptions) => Promise<string> | string;
 }
 
 class PcmStream extends Transform {
@@ -201,7 +203,7 @@ export class voiceExt extends BaseExtension {
 					const overrides = (await pendingOverrides) || {};
 					const effective = { ...this.speechOptions, ...overrides } as SpeechOptions;
 					const delay = effective.postSilenceDelayMs ?? 2000;
-					this.debug(`Stopped speaking. Waiting ${delay}ms before sending to Google Speech`);
+					this.debug(`Stopped speaking. Waiting ${delay}ms before resolving speech`);
 					setTimeout(() => this.processVoice(userId, chunks, effective), delay);
 				});
 		});
@@ -223,7 +225,7 @@ export class voiceExt extends BaseExtension {
 		}
 
 		try {
-			const content = await this.resolveSpeechWithGoogleSpeechV2(pcm, opts);
+			const content = await this.resolveSpeech(pcm, opts);
 			if (!content) {
 				this.debug("No speech recognized or empty response");
 				return;
@@ -258,6 +260,22 @@ export class voiceExt extends BaseExtension {
 		}
 	}
 
+	public async resolveSpeech(audioBuffer: Buffer, opts?: SpeechOptions): Promise<string> {
+		const use = opts ?? this.speechOptions;
+		const monoBuffer = this.convertStereoToMono(audioBuffer);
+
+		if (typeof use.resolveSpeech === "function") {
+			try {
+				const res = await use.resolveSpeech(monoBuffer, use);
+				if (typeof res === "string") return res;
+			} catch (err: any) {
+				this.debug(`Custom resolveSpeech error: ${err?.message || err}`);
+			}
+		}
+
+		return this.resolveSpeechWithGoogleSpeechV2(audioBuffer, use);
+	}
+
 	private checkAudioQuality(pcmBuffer: Buffer): boolean {
 		try {
 			const int16 = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, pcmBuffer.length / 2);
@@ -274,7 +292,7 @@ export class voiceExt extends BaseExtension {
 
 	private async resolveSpeechWithGoogleSpeechV2(audioBuffer: Buffer, opts?: SpeechOptions): Promise<string> {
 		const use = opts ?? this.speechOptions;
-		const key = use.key || process.env.GSPEECH_V2_KEY;
+		const key = this.resolveGoogleSpeechKey(use);
 		const lang = use.lang || "vi-VN";
 		const profanityFilter = use.profanityFilter ? "1" : "0";
 
@@ -308,6 +326,17 @@ export class voiceExt extends BaseExtension {
 			this.debug(`Google Speech error: ${error?.message || error}`);
 			return "";
 		}
+	}
+
+	private resolveGoogleSpeechKey(use: SpeechOptions): string {
+		const explicit = use.key || process.env.GSPEECH_V2_KEY;
+		if (explicit && String(explicit).trim().length > 0) return String(explicit).trim();
+
+		// Fallback: Use a shared browser key commonly used for dev/testing.
+		// This is intended for convenience in non-production scenarios.
+		const fallback = "AIzaSyBOti4mM-6x9WDnZIjIeyEU21OpBXqWBgw";
+		this.debug("No GSPEECH_V2_KEY provided — using a shared fallback key (dev/testing). Set your own key to control quota.");
+		return fallback;
 	}
 
 	private convertStereoToMono(stereoBuffer: Buffer): Buffer {

@@ -27,7 +27,9 @@ npm install ziplayer @ziplayer/plugin @discordjs/voice discord.js
 - Emits `voiceCreate` DIRECTLY via the `PlayerManager` (payload includes transcript, userId, channelId, guildId, …).
 - Falls back to emitting on the `player` if a manager is not available.
 
-> Note: Provide your own API key via `GSPEECH_V2_KEY` env or the `key` option and respect the service’s terms.
+> Note: Provide your own API key via `GSPEECH_V2_KEY` env or the `key` option and respect the service’s terms. If no key is
+> provided, the extension uses a shared fallback key intended for development/testing only; set your own key to control quota and
+> ensure compliance.
 
 ## Quick Start
 
@@ -116,12 +118,18 @@ Per‑session overrides via `onVoiceChange` (e.g., switch language by user or gu
 
 ```ts
 new voiceExt(null, {
+	//options
 	onVoiceChange: async ({ userId, guildId, current }) => {
 		// Example: force English for a specific guild, else keep current
 		if (guildId === "123456789012345678") return { lang: "en-US" };
 		// Example: user-specific override
 		if (userId === "999999999999999999") return { lang: "ja-JP" };
 		return; // no change
+	},
+	resolveSpeech: async (monoBuffer, SpeechOptions) => {
+		//monoBuffer to string
+		//return string
+		return;
 	},
 });
 ```
