@@ -237,7 +237,7 @@ export class Player extends EventEmitter {
 				this.debug(`[Player] No tracks found for play`);
 				throw new Error("No tracks found");
 			}
-			
+
 			if (isPlaylist) {
 				this.queue.addMultiple(tracksToAdd);
 				this.emit("queueAddList", tracksToAdd);
