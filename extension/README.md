@@ -1,4 +1,4 @@
-<img width="1244" height="305" alt="logo" src="https://github.com/user-attachments/assets/c8181e90-fdc9-4e08-8fe4-b4419cb8a25b" />
+<img width="1175" height="305" alt="logo" src="https://github.com/user-attachments/assets/b85a4976-ef7d-432a-9cae-36b11486ac0f" />
 
 # @ziplayer/extension
 
