@@ -194,9 +194,27 @@ export class voiceExt extends BaseExtension {
 				},
 			});
 
+			// Prefer native @discordjs/opus; prism-media will pick it if installed.
+			// Add defensive error handling to swallow transient corrupted frames.
+			const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
+			decoder.on("error", (e: any) => {
+				try {
+					const msg = String(e?.message || e || "");
+					const transient = /compressed data passed is corrupted|invalid packet/i.test(msg);
+					if (!transient) this.debug(`Decoder error: ${msg}`);
+					// Swallow; let stream continue
+				} catch {}
+			});
+			opusStream.on("error", (e: any) => {
+				try {
+					const msg = String(e?.message || e || "");
+					this.debug(`Opus stream error: ${msg}`);
+				} catch {}
+			});
+
 			const chunks: Buffer[] = [];
 			opusStream
-				.pipe(new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 }))
+				.pipe(decoder)
 				.pipe(new PcmStream())
 				.on("data", (d: Buffer) => chunks.push(d))
 				.on("end", async () => {
