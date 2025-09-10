@@ -1,6 +1,6 @@
 import { VoiceConnection } from "@discordjs/voice";
-import { VoiceChannel } from "discord.js";
 import { Readable } from "stream";
+import { Player } from "../structures/Player";
 
 export interface Track {
 	id: string;
@@ -34,16 +34,29 @@ export interface PlayerOptions {
 	leaveTimeout?: number;
 	volume?: number;
 	quality?: "high" | "low";
+	selfDeaf?: boolean;
+	selfMute?: boolean;
 	/**
 	 * Timeout in milliseconds for plugin operations (search, streaming, etc.)
 	 * to prevent long-running tasks from blocking the player.
 	 */
 	extractorTimeout?: number;
 	userdata?: Record<string, any>;
+	/**
+	 * Optional per-player extension selection. When provided, only these
+	 * extensions will be activated for the created player.
+	 * - Provide instances or constructors to use them explicitly
+	 * - Or provide names (string) to select from manager-registered extensions
+	 */
+	extensions?: any[] | string[];
 }
 
+export type SourcePluginCtor<T extends SourcePlugin = SourcePlugin> = new (...args: any[]) => T;
+export type SourcePluginLike = SourcePlugin | SourcePluginCtor;
+
 export interface PlayerManagerOptions {
-	plugins?: SourcePlugin[];
+	plugins?: SourcePluginLike[];
+	extensions?: any[];
 }
 
 export interface ProgressBarOptions {
@@ -64,6 +77,7 @@ export interface PlayerEvents {
 	connectionError: [error: Error];
 	volumeChange: [oldVolume: number, newVolume: number];
 	queueAdd: [track: Track];
+	queueAddList: [tracks: Track[]];
 	queueRemove: [track: Track, index: number];
 	playerPause: [track: Track];
 	playerResume: [track: Track];
@@ -81,4 +95,13 @@ export interface SourcePlugin {
 	getRelatedTracks?(track: string | number, opts?: { limit?: number; offset?: number }): Promise<Track[]>;
 	validate?(url: string): boolean;
 	extractPlaylist?(url: string, requestedBy: string): Promise<Track[]>;
+}
+
+// Extension interfaces
+export interface SourceExtension {
+	name: string;
+	version: string;
+	connection?: VoiceConnection;
+	player: Player | null;
+	active(alas: any): boolean;
 }

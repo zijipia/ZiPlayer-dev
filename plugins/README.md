@@ -1,154 +1,179 @@
-# ziplayer
+<img width="1175" height="305" alt="logo" src="https://github.com/user-attachments/assets/b85a4976-ef7d-432a-9cae-36b11486ac0f" />
 
-A modular Discord voice player with plugin system for @discordjs/voice.
+# @ziplayer/plugin
 
-## Features
+Official plugin bundle for ZiPlayer. It ships a set of ready‑to‑use source plugins you can register on your `PlayerManager`:
 
-- 🎵 **Plugin-based architecture** - Easy to extend with new sources
-- 🎶 **Multiple source support** - YouTube, SoundCloud, Spotify (with fallback)
-- 🔊 **Queue management** - Add, remove, shuffle, clear
-- 🎚️ **Volume control** - 0-200% volume range
-- ⏯️ **Playback control** - Play, pause, resume, stop, skip
-- 🔁 **Auto play** - Automatically replay the queue when it ends
-- 🔂 **Loop control** - Repeat a single track or the entire queue
-- 📊 **Progress bar** - Display playback progress with customizable icons
-- 🔔 **Event-driven** - Rich event system for all player actions
-- 🎭 **Multi-guild support** - Manage players across multiple Discord servers
-- 🗃️ **User data** - Attach custom data to each player for later use
+- YouTubePlugin: search + stream YouTube videos and playlists
+- SoundCloudPlugin: search + stream SoundCloud tracks and sets
+- SpotifyPlugin: resolve tracks/albums/playlists, stream via fallbacks
+- TTSPlugin: Text‑to‑Speech playback from simple `tts:` queries
+
+ZiPlayer is an audio player built on top of `@discordjs/voice` and `discord.js`. This package provides sources; the core player
+lives in `ziplayer`.
 
 ## Installation
 
 ```bash
-npm install ziplayer @ziplayer/plugin @discordjs/voice discord.js
+npm install @ziplayer/plugin ziplayer @discordjs/voice discord.js
+```
+
+The TTS plugin uses a lightweight Google TTS wrapper and HTTP fetches:
+
+```bash
+npm install @zibot/zitts axios
 ```
 
 ## Quick Start
 
-```typescript
+```ts
 import { PlayerManager } from "ziplayer";
-import { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin } from "@ziplayer/plugin";
+import { YouTubePlugin, SoundCloudPlugin, SpotifyPlugin, TTSPlugin } from "@ziplayer/plugin";
 
-const soundcloudPlugin = new SoundCloudPlugin();
-const youtubePlugin = new YouTubePlugin();
-const spotifyPlugin = new SpotifyPlugin();
-
-// Create player manager with YouTube and SoundCloud plugins
 const manager = new PlayerManager({
-	plugins: [soundcloudPlugin, youtubePlugin, spotifyPlugin],
+	plugins: [
+		// Order matters: put more specific handlers first (e.g., TTS)
+		new TTSPlugin({ defaultLang: "en" }),
+		new YouTubePlugin(),
+		new SoundCloudPlugin(),
+		new SpotifyPlugin(),
+	],
 });
 
-// Create player
-const player = manager.create(guildId, {
-	leaveOnEnd: true,
-	leaveTimeout: 30000,
-	userdata: { channel: textChannel }, // store channel for events
-});
-
-// Connect and play
+// Create and connect a player (discord.js VoiceChannel instance)
+const player = manager.create(guildId, { userdata: { channel: textChannel } });
 await player.connect(voiceChannel);
-await player.play("Never Gonna Give You Up", userId);
 
-// Play a full YouTube playlist
-await player.play("https://www.youtube.com/playlist?list=PL123", userId);
+// Search & play
+await player.play("never gonna give you up", requestedBy);
 
-// Enable autoplay
-player.queue.autoPlay(true);
+// Play a playlist URL directly
+await player.play("https://www.youtube.com/playlist?list=...", requestedBy);
 
-// Loop the entire queue
-player.loop("queue");
+// Speak with TTS
+await player.play("tts:en:Hello there!", requestedBy);
 
-// Play a full SoundCloud playlist
-await player.play("https://soundcloud.com/artist/sets/playlist", userId);
-
-// Events
-player.on("willPlay", (track) => {
-	console.log(`Up next: ${track.title}`);
-});
-player.on("trackStart", (track) => {
-	console.log(`Now playing: ${track.title}`);
-	player.userdata?.channel?.send(`Now playing: ${track.title}`);
+// Handle events via the manager
+manager.on("trackStart", (plr, track) => {
+	plr.userdata?.channel?.send?.(`Now playing: ${track.title}`);
 });
 ```
 
-## Available Plugins
+## Included Plugins
 
 ### YouTubePlugin
 
-Supports YouTube videos and playlists.
+- Resolves YouTube videos and playlists.
+- Uses `youtubei.js` under the hood.
 
-```typescript
+```ts
 import { YouTubePlugin } from "@ziplayer/plugin";
 const youtube = new YouTubePlugin();
 ```
 
 ### SoundCloudPlugin
 
-Supports SoundCloud tracks and playlists.
+- Resolves tracks and sets. You may further tune streaming by combining with other plugins that provide fallbacks.
 
-```typescript
+```ts
 import { SoundCloudPlugin } from "@ziplayer/plugin";
-const soundcloud = new SoundCloudPlugin();
+const sc = new SoundCloudPlugin();
 ```
 
 ### SpotifyPlugin
 
-Supports Spotify tracks, albums, and playlists (requires fallback plugin for streaming).
+- Resolves track/album/playlist metadata from Spotify.
+- Streaming typically uses fallback sources (e.g., YouTube) discovered by your plugin set.
 
-```typescript
+```ts
 import { SpotifyPlugin } from "@ziplayer/plugin";
-const spotify = new SpotifyPlugin();
+const sp = new SpotifyPlugin();
 ```
 
-## Creating Custom Plugins
+### TTSPlugin (Text‑to‑Speech)
 
-```typescript
-import { BasePlugin, Track, SearchResult, StreamInfo } from "@zibot/player";
+- Plays spoken audio from text using a lightweight Google TTS wrapper.
+- Supported query formats:
+  - `tts: <text>`
+  - `tts:<lang>:<text>` (e.g., `tts:vi:xin chao`)
+  - `tts:<lang>:1:<text>` (set `slow = true`, `0` = normal)
+
+```ts
+import { TTSPlugin } from "@ziplayer/plugin";
+const tts = new TTSPlugin({ defaultLang: "en", slow: false });
+await player.play("tts:en:1:good morning", requestedBy);
+```
+
+Note: Please comply with the service’s terms and provide your own quotas. The wrapper is intended for lightweight usage and may
+change without notice.
+
+Advanced: custom TTS provider
+
+You can override audio generation by passing a `createStream` function. It receives the text and context and can return a Node `Readable`, an HTTP(S) URL string, or a `Buffer`.
+
+```ts
+const tts = new TTSPlugin({
+  defaultLang: "vi",
+  async createStream(text, ctx) {
+    // Example: integrate with Azure, CAMB.AI, etc.
+    // Return a URL and the plugin will stream it
+    const url = await myTTSService(text, { lang: ctx?.lang, slow: ctx?.slow });
+    return url; // or Readable / Buffer
+  },
+});
+```
+
+## Writing Your Own Plugin
+
+Plugins implement the `BasePlugin` contract from `ziplayer`:
+
+```ts
+import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
 
 export class MyPlugin extends BasePlugin {
 	name = "myplugin";
 	version = "1.0.0";
 
 	canHandle(query: string): boolean {
+		// Return true if this plugin can handle a given query/URL
 		return query.includes("mysite.com");
 	}
 
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
-		// Implement search logic
+		// Return one or more tracks for the query
 		return {
 			tracks: [
-				/* ... */
+				{
+					id: "abc",
+					title: "My Track",
+					url: "https://mysite.com/track/abc",
+					duration: 180,
+					requestedBy,
+					source: this.name,
+				},
 			],
 		};
 	}
 
 	async getStream(track: Track): Promise<StreamInfo> {
-		// Return audio stream
+		// Return a Node Readable stream and an input type
 		return { stream, type: "arbitrary" };
 	}
 }
 ```
 
-## Events
+Tips
 
-All player events are forwarded through the PlayerManager:
+- Keep network calls bounded; ZiPlayer applies timeouts to extractor operations.
+- For sources that require indirection (like Spotify), consider a `getFallback` strategy via other plugins.
+- Use `track.metadata` for any source‑specific fields you want to carry along.
 
-- `trackStart` - When a track starts playing
-- `willPlay` - Before a track begins playing
-- `trackEnd` - When a track finishes
-- `queueEnd` - When the queue is empty
-- `playerError` - When an error occurs
-- `queueAdd` - When a track is added
-- `volumeChange` - When volume changes
-- And more...
+## Requirements
 
-## Progress Bar
-
-Display the current playback progress with `getProgressBar`:
-
-```typescript
-console.log(player.getProgressBar({ size: 30, barChar: "-", progressChar: "🔘" }));
-```
+- Node.js 18+
+- `discord.js` 14 and `@discordjs/voice` 0.19+
+- For TTS: `@zibot/zitts` and `axios`
 
 ## License
 
-MIT License
+MIT

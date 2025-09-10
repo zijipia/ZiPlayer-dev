@@ -74,6 +74,8 @@ export class Player extends EventEmitter {
 			volume: 100,
 			quality: "high",
 			extractorTimeout: 50000,
+			selfDeaf: true,
+			selfMute: false,
 			...options,
 		};
 
@@ -157,6 +159,8 @@ export class Player extends EventEmitter {
 				channelId: channel.id,
 				guildId: channel.guildId,
 				adapterCreator: channel.guild.voiceAdapterCreator as any,
+				selfDeaf: this.options.selfDeaf ?? true,
+				selfMute: this.options.selfMute ?? false,
 			});
 
 			await entersState(connection, VoiceConnectionStatus.Ready, 50_000);
@@ -188,31 +192,41 @@ export class Player extends EventEmitter {
 
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		this.debug(`[Player] Search called with query: ${query}, requestedBy: ${requestedBy}`);
-		const plugin = this.pluginManager.findPlugin(query);
-		if (!plugin) {
-			this.debug(`[Player] No plugin found to handle: ${query}`);
-			throw new Error(`No plugin found to handle: ${query}`);
+		const plugins = this.pluginManager.getAll();
+		let lastError: any = null;
+
+		for (const p of plugins) {
+			try {
+				this.debug(`[Player] Trying plugin for search: ${p.name}`);
+				const res = await this.withTimeout(p.search(query, requestedBy), `Search operation timed out for ${p.name}`);
+				if (res && Array.isArray(res.tracks) && res.tracks.length > 0) {
+					this.debug(`[Player] Plugin '${p.name}' returned ${res.tracks.length} tracks`);
+					return res;
+				}
+				this.debug(`[Player] Plugin '${p.name}' returned no tracks`);
+			} catch (error) {
+				lastError = error;
+				this.debug(`[Player] Search via plugin '${p.name}' failed:`, error);
+				// Continue to next plugin
+			}
 		}
 
-		try {
-			return await this.withTimeout(plugin.search(query, requestedBy), "Search operation timed out");
-		} catch (error) {
-			this.debug(`[Player] Search error:`, error);
-			this.emit("playerError", error as Error);
-			throw error;
-		}
+		this.debug(`[Player] No plugins returned results for query: ${query}`);
+		if (lastError) this.emit("playerError", lastError as Error);
+		throw new Error(`No plugin found to handle: ${query}`);
 	}
 
 	async play(query: string | Track, requestedBy?: string): Promise<boolean> {
 		try {
 			this.debug(`[Player] Play called with query: ${typeof query === "string" ? query : query?.title}`);
 			let tracksToAdd: Track[] = [];
-
+			let isPlaylist = false;
 			if (typeof query === "string") {
 				const searchResult = await this.search(query, requestedBy || "Unknown");
 				tracksToAdd = searchResult.tracks;
 
 				if (searchResult.playlist) {
+					isPlaylist = true;
 					this.debug(`[Player] Added playlist: ${searchResult.playlist.name} (${tracksToAdd.length} tracks)`);
 				}
 			} else {
@@ -223,12 +237,13 @@ export class Player extends EventEmitter {
 				this.debug(`[Player] No tracks found for play`);
 				throw new Error("No tracks found");
 			}
-
-			// Add tracks to queue
-			for (const track of tracksToAdd) {
-				this.debug(`[Player] Adding track to queue: ${track.title}`);
-				this.queue.add(track);
-				this.emit("queueAdd", track);
+			
+			if (isPlaylist) {
+				this.queue.addMultiple(tracksToAdd);
+				this.emit("queueAddList", tracksToAdd);
+			} else {
+				this.queue.add(tracksToAdd?.[0]);
+				this.emit("queueAdd", tracksToAdd?.[0]);
 			}
 
 			// Start playing if not already playing

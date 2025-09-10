@@ -5,6 +5,7 @@ import { PlayerManagerOptions, PlayerOptions, Track, SourcePlugin } from "../typ
 export class PlayerManager extends EventEmitter {
 	private players: Map<string, Player> = new Map();
 	private plugins: SourcePlugin[];
+	private extensions: any[];
 	private B_debug: boolean = false;
 
 	private debug(message?: any, ...optionalParams: any[]): void {
@@ -18,7 +19,21 @@ export class PlayerManager extends EventEmitter {
 
 	constructor(options: PlayerManagerOptions = {}) {
 		super();
-		this.plugins = options.plugins || [];
+		this.plugins = [];
+		const provided = options.plugins || [];
+		for (const p of provided as any[]) {
+			try {
+				if (p && typeof p === "object") {
+					this.plugins.push(p as SourcePlugin);
+				} else if (typeof p === "function") {
+					const instance = new (p as any)();
+					this.plugins.push(instance as SourcePlugin);
+				}
+			} catch (e) {
+				this.debug(`[PlayerManager] Failed to init plugin:`, e);
+			}
+		}
+		this.extensions = options.extensions || [];
 	}
 
 	private resolveGuildId(guildOrId: string | { id: string }): string {
@@ -37,6 +52,44 @@ export class PlayerManager extends EventEmitter {
 		const player = new Player(guildId, options, this);
 		this.plugins.forEach((plugin) => player.addPlugin(plugin));
 
+		let extsToActivate: any[] = [];
+		const optExts = (options as any)?.extensions as any[] | string[] | undefined;
+		if (Array.isArray(optExts)) {
+			if (optExts.length === 0) {
+				extsToActivate = [];
+			} else if (typeof optExts[0] === "string") {
+				const wanted = new Set(optExts as string[]);
+				extsToActivate = this.extensions.filter((ext) => {
+					const name = typeof ext === "function" ? ext.name : ext?.name;
+					return !!name && wanted.has(name);
+				});
+			} else {
+				extsToActivate = optExts;
+			}
+		}
+
+		for (const ext of extsToActivate) {
+			let instance = ext;
+			if (typeof ext === "function") {
+				try {
+					instance = new ext(player);
+				} catch (e) {
+					this.debug(`[PlayerManager] Extension constructor error:`, e);
+					continue;
+				}
+			}
+			if (instance && typeof instance === "object") {
+				if ("player" in instance && !instance.player) instance.player = player;
+				if (typeof instance.active === "function") {
+					try {
+						instance.active({ manager: this, player });
+					} catch (e) {
+						this.debug(`[PlayerManager] Extension activation error:`, e);
+					}
+				}
+			}
+		}
+
 		// Forward all player events
 		player.on("willPlay", (track, tracks) => this.emit("willPlay", player, track, tracks));
 		player.on("trackStart", (track) => this.emit("trackStart", player, track));
@@ -46,6 +99,7 @@ export class PlayerManager extends EventEmitter {
 		player.on("connectionError", (error) => this.emit("connectionError", player, error));
 		player.on("volumeChange", (old, volume) => this.emit("volumeChange", player, old, volume));
 		player.on("queueAdd", (track) => this.emit("queueAdd", player, track));
+		player.on("queueAddList", (tracks) => this.emit("queueAddList", player, tracks));
 		player.on("queueRemove", (track, index) => this.emit("queueRemove", player, track, index));
 		player.on("playerPause", (track) => this.emit("playerPause", player, track));
 		player.on("playerResume", (track) => this.emit("playerResume", player, track));

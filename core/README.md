@@ -1,3 +1,5 @@
+<img width="1175" height="305" alt="logo" src="https://github.com/user-attachments/assets/b85a4976-ef7d-432a-9cae-36b11486ac0f" />
+
 # ziplayer
 
 A modular Discord voice player with plugin system for @discordjs/voice.
@@ -19,7 +21,7 @@ A modular Discord voice player with plugin system for @discordjs/voice.
 ## Installation
 
 ```bash
-npm install ziplayer @ziplayer/plugin @discordjs/voice discord.js
+npm install ziplayer @ziplayer/plugin @ziplayer/extension @discordjs/voice discord.js
 ```
 
 ## Quick Start
@@ -27,14 +29,17 @@ npm install ziplayer @ziplayer/plugin @discordjs/voice discord.js
 ```typescript
 import { PlayerManager } from "ziplayer";
 import { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin } from "@ziplayer/plugin";
+import { voiceExt } from "@ziplayer/extension";
 
-const soundcloudPlugin = new SoundCloudPlugin();
-const youtubePlugin = new YouTubePlugin();
-const spotifyPlugin = new SpotifyPlugin();
-
-// Create player manager with YouTube and SoundCloud plugins
 const manager = new PlayerManager({
-	plugins: [soundcloudPlugin, youtubePlugin, spotifyPlugin],
+	plugins: [new SoundCloudPlugin(), new YouTubePlugin(), new SpotifyPlugin()],
+	extensions: [
+		new voiceExt(null, {
+			lang: "vi-VN",
+			minimalVoiceMessageDuration: 1,
+			postSilenceDelayMs: 2000,
+		}),
+	],
 });
 
 // Create player
@@ -42,6 +47,8 @@ const player = manager.create(guildId, {
 	leaveOnEnd: true,
 	leaveTimeout: 30000,
 	userdata: { channel: textChannel }, // store channel for events
+	// Choose extensions for this player (by name or instances)
+	extensions: ["voiceExt"],
 });
 
 // Connect and play
@@ -54,19 +61,21 @@ await player.play("https://www.youtube.com/playlist?list=PL123", userId);
 // Enable autoplay
 player.queue.autoPlay(true);
 
-// Loop the entire queue
-player.loop("queue");
-
 // Play a full SoundCloud playlist
 await player.play("https://soundcloud.com/artist/sets/playlist", userId);
 
 // Events
-player.on("willPlay", (track) => {
+player.on("willPlay", (player, track) => {
 	console.log(`Up next: ${track.title}`);
 });
-player.on("trackStart", (track) => {
+player.on("trackStart", (player, track) => {
 	console.log(`Now playing: ${track.title}`);
 	player.userdata?.channel?.send(`Now playing: ${track.title}`);
+});
+
+// Receive transcripts
+manager.on("voiceCreate", (player, evt) => {
+	console.log(`User ${evt.userId} said: ${evt.content}`);
 });
 ```
 
@@ -102,7 +111,7 @@ const spotify = new SpotifyPlugin();
 ## Creating Custom Plugins
 
 ```typescript
-import { BasePlugin, Track, SearchResult, StreamInfo } from "@zibot/player";
+import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
 
 export class MyPlugin extends BasePlugin {
 	name = "myplugin";
@@ -128,6 +137,14 @@ export class MyPlugin extends BasePlugin {
 }
 ```
 
+## Progress Bar
+
+Display the current playback progress with `getProgressBar`:
+
+```typescript
+console.log(player.getProgressBar({ size: 30, barChar: "-", progressChar: "🔘" }));
+```
+
 ## Events
 
 All player events are forwarded through the PlayerManager:
@@ -141,13 +158,11 @@ All player events are forwarded through the PlayerManager:
 - `volumeChange` - When volume changes
 - And more...
 
-## Progress Bar
+## Useful Links
 
-Display the current playback progress with `getProgressBar`:
-
-```typescript
-console.log(player.getProgressBar({ size: 30, barChar: "-", progressChar: "🔘" }));
-```
+[Example](https://github.com/ZiProject/ZiPlayer/tree/main/examples) | [Repo](https://github.com/ZiProject/ZiPlayer) |
+[Package](https://www.npmjs.com/package/ziplayer) | [Plugin](https://www.npmjs.com/package/@ziplayer/plugin) |
+[Extension](https://www.npmjs.com/package/@ziplayer/extension)
 
 ## License
 
