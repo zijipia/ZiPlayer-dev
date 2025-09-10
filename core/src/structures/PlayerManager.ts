@@ -85,6 +85,7 @@ export class PlayerManager extends EventEmitter {
 		player.on("connectionError", (error) => this.emit("connectionError", player, error));
 		player.on("volumeChange", (old, volume) => this.emit("volumeChange", player, old, volume));
 		player.on("queueAdd", (track) => this.emit("queueAdd", player, track));
+		player.on("queueAddList", (tracks) => this.emit("queueAddList", player, tracks));
 		player.on("queueRemove", (track, index) => this.emit("queueRemove", player, track, index));
 		player.on("playerPause", (track) => this.emit("playerPause", player, track));
 		player.on("playerResume", (track) => this.emit("playerResume", player, track));

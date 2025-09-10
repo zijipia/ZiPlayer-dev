@@ -1,4 +1,4 @@
-import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
+﻿import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
 import { Readable } from "stream";
 import { getTTSUrls } from "@zibot/zitts";
 import axios from "axios";
@@ -15,6 +15,7 @@ export interface TTSPluginOptions {
 	 * - Node Readable (preferred)
 	 * - HTTP(S) URL string or URL object
 	 * - Buffer / Uint8Array / ArrayBuffer
+		\t * - Or an object with { stream, type } | { url, type }
 	 */
 	createStream?: (
 		text: string,
@@ -83,8 +84,52 @@ export class TTSPlugin extends BasePlugin {
 
 		if (this.opts.createStream && typeof this.opts.createStream === "function") {
 			const out = await this.opts.createStream(cfg.text, { lang: cfg.lang, slow: cfg.slow, track });
-			const stream = await this.toReadable(out);
-			return { stream, type: "arbitrary", metadata: { provider: "custom" } };
+			let type: StreamInfo["type"] | undefined;
+			let metadata: Record<string, any> | undefined;
+			let stream: Readable | null = null;
+
+			const normType = (t?: any): StreamInfo["type"] | undefined => {
+				if (!t || typeof t !== "string") return undefined;
+				const v = t.toLowerCase();
+				if (v.includes("webm") && v.includes("opus")) return "webm/opus";
+				if (v.includes("ogg") && v.includes("opus")) return "ogg/opus";
+				return undefined;
+			};
+
+			if (out && typeof out === "object") {
+				// If it's already a Readable/Buffer/Uint8Array/ArrayBuffer/URL, let toReadable handle it
+				if (
+					out instanceof Readable ||
+					out instanceof Buffer ||
+					out instanceof Uint8Array ||
+					out instanceof ArrayBuffer ||
+					out instanceof URL
+				) {
+					stream = await this.toReadable(out as any);
+				} else if ((out as any).stream) {
+					const o = out as any;
+					stream = o.stream as Readable;
+					type = normType(o.type);
+					metadata = o.metadata;
+				} else if ((out as any).url) {
+					const o = out as any;
+					const urlStr = o.url.toString();
+					try {
+						type =
+							normType(o.type) || (urlStr.endsWith(".webm") ? "webm/opus" : urlStr.endsWith(".ogg") ? "ogg/opus" : undefined);
+						const res = await axios.get(urlStr, { responseType: "stream" });
+						stream = res.data as unknown as Readable;
+						metadata = o.metadata;
+					} catch (e) {
+						throw new Error(`Failed to fetch custom TTS URL: ${e}`);
+					}
+				}
+			}
+
+			if (!stream) {
+				stream = await this.toReadable(out as any);
+			}
+			return { stream, type: type || "arbitrary", metadata: { provider: "custom", ...(metadata || {}) } };
 		}
 
 		const urls = getTTSUrls(cfg.text, { lang: cfg.lang, slow: cfg.slow });

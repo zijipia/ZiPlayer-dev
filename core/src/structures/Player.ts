@@ -220,12 +220,13 @@ export class Player extends EventEmitter {
 		try {
 			this.debug(`[Player] Play called with query: ${typeof query === "string" ? query : query?.title}`);
 			let tracksToAdd: Track[] = [];
-
+			let isPlaylist = false;
 			if (typeof query === "string") {
 				const searchResult = await this.search(query, requestedBy || "Unknown");
 				tracksToAdd = searchResult.tracks;
 
 				if (searchResult.playlist) {
+					isPlaylist = true;
 					this.debug(`[Player] Added playlist: ${searchResult.playlist.name} (${tracksToAdd.length} tracks)`);
 				}
 			} else {
@@ -236,12 +237,13 @@ export class Player extends EventEmitter {
 				this.debug(`[Player] No tracks found for play`);
 				throw new Error("No tracks found");
 			}
-
-			// Add tracks to queue
-			for (const track of tracksToAdd) {
-				this.debug(`[Player] Adding track to queue: ${track.title}`);
-				this.queue.add(track);
-				this.emit("queueAdd", track);
+			
+			if (isPlaylist) {
+				this.queue.addMultiple(tracksToAdd);
+				this.emit("queueAddList", tracksToAdd);
+			} else {
+				this.queue.add(tracksToAdd?.[0]);
+				this.emit("queueAdd", tracksToAdd?.[0]);
 			}
 
 			// Start playing if not already playing

@@ -70,6 +70,7 @@ export interface PlayerEvents {
 	connectionError: [error: Error];
 	volumeChange: [oldVolume: number, newVolume: number];
 	queueAdd: [track: Track];
+	queueAddList: [tracks: Track[]];
 	queueRemove: [track: Track, index: number];
 	playerPause: [track: Track];
 	playerResume: [track: Track];
