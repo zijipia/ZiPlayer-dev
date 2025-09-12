@@ -1,23 +1,26 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+const test = require("node:test");
+const assert = require("node:assert/strict");
 
-const { PlayerManager } = require('../core/dist');
+const { PlayerManager } = require("../core/dist");
 
-test('Player setVolume constraints and event', () => {
-  const mgr = new PlayerManager();
-  const player = mgr.create('g1');
+test("Player setVolume constraints and event", () => {
+	const mgr = new PlayerManager();
+	const player = mgr.create("g1");
 
-  // out of range
-  assert.equal(player.setVolume(-10), false);
-  assert.equal(player.setVolume(201), false);
+	// out of range
+	assert.equal(player.setVolume(-10), false);
+	assert.equal(player.setVolume(201), false);
 
-  let evtOld = null, evtNew = null;
-  player.on('volumeChange', (oldV, newV) => { evtOld = oldV; evtNew = newV; });
+	let evtOld = null,
+		evtNew = null;
+	player.on("volumeChange", (oldV, newV) => {
+		evtOld = oldV;
+		evtNew = newV;
+	});
 
-  const ok = player.setVolume(50);
-  assert.equal(ok, true);
-  assert.equal(player.volume, 50);
-  assert.equal(evtOld, 100);
-  assert.equal(evtNew, 50);
+	const ok = player.setVolume(50);
+	assert.equal(ok, true);
+	assert.equal(player.volume, 50);
+	assert.equal(evtOld, 100);
+	assert.equal(evtNew, 50);
 });
-
