@@ -189,8 +189,10 @@ npm test
 
 Notes
 
-- Tests focus on core data structures (Queue, PluginManager, Player/Manager basics) and plugin logic that does not require network calls.
-- Network-heavy behaviors (e.g., resolving or streaming from YouTube/SoundCloud/Spotify) are intentionally not exercised to keep tests deterministic and fast.
+- Tests focus on core data structures (Queue, PluginManager, Player/Manager basics) and plugin logic that does not require network
+  calls.
+- Network-heavy behaviors (e.g., resolving or streaming from YouTube/SoundCloud/Spotify) are intentionally not exercised to keep
+  tests deterministic and fast.
 
 ## License
 
