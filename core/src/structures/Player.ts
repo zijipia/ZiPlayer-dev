@@ -41,6 +41,11 @@ export class Player extends EventEmitter {
 	private volumeInterval: NodeJS.Timeout | null = null;
 	private skipLoop = false;
 
+	// TTS support
+	private ttsPlayer: DiscordAudioPlayer | null = null;
+	private ttsQueue: Array<Track> = [];
+	private ttsActive = false;
+
 	private withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
 		const timeout = this.options.extractorTimeout ?? 15000;
 		return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), timeout))]);
@@ -77,11 +82,23 @@ export class Player extends EventEmitter {
 			selfDeaf: true,
 			selfMute: false,
 			...options,
+			tts: {
+				createPlayer: false,
+				interrupt: true,
+				volume: 100,
+				Max_Time_TTS: 60_000,
+				...(options?.tts || {}),
+			},
 		};
 
 		this.volume = this.options.volume || 100;
 		this.userdata = this.options.userdata;
 		this.setupEventListeners();
+
+		// Optionally pre-create the TTS AudioPlayer
+		if (this.options?.tts?.createPlayer) {
+			this.ensureTTSPlayer();
+		}
 	}
 
 	private setupEventListeners(): void {
@@ -140,6 +157,18 @@ export class Player extends EventEmitter {
 				this.emit("debug", ...args);
 			}
 		});
+	}
+
+	private ensureTTSPlayer(): DiscordAudioPlayer {
+		if (this.ttsPlayer) return this.ttsPlayer;
+		this.ttsPlayer = createAudioPlayer({
+			behaviors: {
+				noSubscriber: NoSubscriberBehavior.Pause,
+				maxMissedFrames: 100,
+			},
+		});
+		this.ttsPlayer.on("error", (e) => this.debug("[TTS] error:", e));
+		return this.ttsPlayer;
 	}
 
 	addPlugin(plugin: SourcePlugin): void {
@@ -238,6 +267,30 @@ export class Player extends EventEmitter {
 				throw new Error("No tracks found");
 			}
 
+			// If a TTS track is requested and interrupt mode is enabled, handle it separately
+			const isTTS = (t: Track | undefined) => {
+				if (!t) return false;
+				try {
+					return typeof t.source === "string" && t.source.toLowerCase().includes("tts");
+				} catch {
+					return false;
+				}
+			};
+
+			const queryLooksTTS = typeof query === "string" && query.trim().toLowerCase().startsWith("tts");
+
+			if (
+				!isPlaylist &&
+				tracksToAdd.length > 0 &&
+				this.options?.tts?.interrupt !== false &&
+				(isTTS(tracksToAdd[0]) || queryLooksTTS)
+			) {
+				// Interrupt music playback with TTS (do not modify the music queue)
+				this.debug(`[Player] Interrupting with TTS: ${tracksToAdd[0].title}`);
+				await this.interruptWithTTSTrack(tracksToAdd[0]);
+				return true;
+			}
+
 			if (isPlaylist) {
 				this.queue.addMultiple(tracksToAdd);
 				this.emit("queueAddList", tracksToAdd);
@@ -257,6 +310,116 @@ export class Player extends EventEmitter {
 			this.emit("playerError", error as Error);
 			return false;
 		}
+	}
+
+	/**
+	 * Interrupt current music with a TTS track. Pauses music, swaps the
+	 * subscription to a dedicated TTS player, plays TTS, then resumes.
+	 */
+	public async interruptWithTTSTrack(track: Track): Promise<void> {
+		this.ttsQueue.push(track);
+		if (!this.ttsActive) {
+			void this.playNextTTS();
+		}
+	}
+
+	/** Play queued TTS items sequentially */
+	private async playNextTTS(): Promise<void> {
+		const next = this.ttsQueue.shift();
+		if (!next) return;
+		this.ttsActive = true;
+
+		try {
+			if (!this.connection) throw new Error("No voice connection for TTS");
+			const ttsPlayer = this.ensureTTSPlayer();
+
+			// Build resource from plugin stream
+			const resource = await this.resourceFromTrack(next);
+			if (resource.volume) {
+				resource.volume.setVolume((this.options?.tts?.volume ?? this?.volume ?? 100) / 100);
+			}
+
+			const wasPlaying =
+				this.audioPlayer.state.status === AudioPlayerStatus.Playing ||
+				this.audioPlayer.state.status === AudioPlayerStatus.Buffering;
+
+			// Pause current music if any
+			try {
+				this.audioPlayer.pause(true);
+			} catch {}
+
+			// Swap subscription and play TTS
+			this.connection.subscribe(ttsPlayer);
+			this.emit("ttsStart", { track: next });
+			ttsPlayer.play(resource);
+
+			// Wait until TTS starts then finishes
+			await entersState(ttsPlayer, AudioPlayerStatus.Playing, 5_000).catch(() => null);
+			await entersState(ttsPlayer, AudioPlayerStatus.Idle, this.options?.tts?.Max_Time_TTS || 60_000).catch(() => null);
+
+			// Swap back and resume if needed
+			this.connection.subscribe(this.audioPlayer);
+			if (wasPlaying) {
+				try {
+					this.audioPlayer.unpause();
+				} catch {}
+			}
+			this.emit("ttsEnd");
+		} catch (err) {
+			this.debug("[TTS] error while playing:", err);
+			this.emit("playerError", err as Error);
+		} finally {
+			this.ttsActive = false;
+			if (this.ttsQueue.length > 0) {
+				await this.playNextTTS();
+			}
+		}
+	}
+
+	/** Build AudioResource for a given track using the plugin pipeline */
+	private async resourceFromTrack(track: Track): Promise<AudioResource> {
+		// Resolve plugin similar to playNext
+		const plugin = this.pluginManager.findPlugin(track.url) || this.pluginManager.get(track.source);
+		if (!plugin) throw new Error(`No plugin found for track: ${track.title}`);
+
+		let streamInfo: any;
+		try {
+			streamInfo = await this.withTimeout(plugin.getStream(track), "getStream timed out");
+		} catch (streamError) {
+			// try fallbacks
+			const allplugs = this.pluginManager.getAll();
+			for (const p of allplugs) {
+				if (typeof (p as any).getFallback !== "function") continue;
+				try {
+					streamInfo = await this.withTimeout(
+						(p as any).getFallback(track),
+						`getFallback timed out for plugin ${(p as any).name}`,
+					);
+					if (!streamInfo?.stream) continue;
+					break;
+				} catch {}
+			}
+			if (!streamInfo?.stream) throw new Error(`All getFallback attempts failed for track: ${track.title}`);
+		}
+
+		const mapToStreamType = (type: string): StreamType => {
+			switch (type) {
+				case "webm/opus":
+					return StreamType.WebmOpus;
+				case "ogg/opus":
+					return StreamType.OggOpus;
+				case "arbitrary":
+				default:
+					return StreamType.Arbitrary;
+			}
+		};
+
+		const inputType = mapToStreamType(streamInfo.type);
+		return createAudioResource(streamInfo.stream, {
+			metadata: track,
+			inputType,
+			inlineVolume: true,
+		});
 	}
 
 	private async generateWillNext(): Promise<void> {
@@ -464,7 +627,7 @@ export class Player extends EventEmitter {
 					clearInterval(this.volumeInterval!);
 					this.volumeInterval = null;
 				}
-			}, 500);
+			}, 300);
 		}
 
 		this.emit("volumeChange", oldVolume, volume);
@@ -541,6 +704,13 @@ export class Player extends EventEmitter {
 		}
 
 		this.audioPlayer.stop(true);
+
+		if (this.ttsPlayer) {
+			try {
+				this.ttsPlayer.stop(true);
+			} catch {}
+			this.ttsPlayer = null;
+		}
 
 		if (this.connection) {
 			this.connection.destroy();

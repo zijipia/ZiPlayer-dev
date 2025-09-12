@@ -43,6 +43,21 @@ export interface PlayerOptions {
 	extractorTimeout?: number;
 	userdata?: Record<string, any>;
 	/**
+	 * Text-to-Speech settings. When enabled, the player can create a
+	 * dedicated AudioPlayer to play TTS while pausing the music player
+	 * then resume the music after TTS finishes.
+	 */
+	tts?: {
+		/** Create a dedicated tts AudioPlayer at construction time */
+		createPlayer?: boolean;
+		/** Pause music and swap subscription to play TTS */
+		interrupt?: boolean;
+		/** Default TTS volume multiplier 1 => 100% */
+		volume?: number;
+		/** Max time tts playback Duration */
+		Max_Time_TTS?: number;
+	};
+	/**
 	 * Optional per-player extension selection. When provided, only these
 	 * extensions will be activated for the created player.
 	 * - Provide instances or constructors to use them explicitly
@@ -83,6 +98,10 @@ export interface PlayerEvents {
 	playerResume: [track: Track];
 	playerStop: [];
 	playerDestroy: [];
+	/** Emitted when TTS starts playing (interruption mode) */
+	ttsStart: [payload: { text?: string; track?: Track }];
+	/** Emitted when TTS finished (interruption mode) */
+	ttsEnd: [];
 }
 
 // Plugin interfaces

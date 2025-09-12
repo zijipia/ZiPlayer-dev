@@ -108,6 +108,8 @@ export class PlayerManager extends EventEmitter {
 			this.emit("playerDestroy", player);
 			this.players.delete(guildId);
 		});
+		player.on("ttsStart", (payload) => this.emit("ttsStart", player, payload));
+		player.on("ttsEnd", () => this.emit("ttsEnd", player));
 		player.on("debug", (...args) => {
 			if (this.listenerCount("debug") > 0) {
 				this.emit("debug", ...args);
