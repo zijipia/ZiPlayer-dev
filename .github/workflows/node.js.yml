@@ -109,3 +109,73 @@ jobs:
         run: |
           echo "Formatting issues detected. Please run 'npm run format'." >&2
           exit 1
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Install (noop if none)
+        run: npm ci || npm i
+
+      - name: Run tests
+        id: tests
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test_output.txt
+          code=${PIPESTATUS[0]}
+          summary=$(grep '^# ' test_output.txt | sed 's/^# //')
+          echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$summary" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          if [ $code -ne 0 ]; then
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=passed" >> "$GITHUB_OUTPUT"
+          fi
+          # Do not fail this step; allow comment step to run first.
+          exit 0
+
+      - name: Comment test results on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = '<!-- test-report -->';
+            const status = '${{ steps.tests.outputs.status }}' || 'unknown';
+            const summary = `${{ steps.tests.outputs.summary }}`.trim();
+            const icon = status === 'passed' ? '✅' : (status === 'failed' ? '❌' : 'ℹ️');
+            const body = [
+              marker,
+              `Unit Test Results ${icon}`,
+              '',
+              '```
+'+ (summary || 'No summary captured') +'
+```',
+              '',
+              '_Node.js 20.x_'
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const list = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const existing = list.data.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Fail if tests failed
+        if: steps.tests.outputs.status == 'failed'
+        run: |
+          echo "Unit tests failed." >&2
+          exit 1
