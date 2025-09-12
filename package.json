@@ -1,9 +1,9 @@
 {
-	"name": "ziplayer-dev-root",
-	"private": true,
-	"scripts": {
-		"test": "node --test \"tests/**/*.test.js\" \"tests/**/*.test.cjs\" \"tests/**/*.js\"",
-		"format": "npx prettier --ignore-path .gitignore --write .",
-		"format:check": "npx prettier --ignore-path .gitignore -l ."
-	}
+  "name": "ziplayer-dev-root",
+  "private": true,
+  "scripts": {
+    "test": "node --test",
+    "format": "npx prettier --ignore-path .gitignore --write .",
+    "format:check": "npx prettier --ignore-path .gitignore -l ."
+  }
 }
