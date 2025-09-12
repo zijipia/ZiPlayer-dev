@@ -121,8 +121,15 @@ jobs:
         with:
           node-version: "20.x"
 
-      - name: Install dependencies
-        run: npm i
+      - name: Bootstrap core package
+        run: |
+          npm -C core ci || npm -C core i
+          npm -C core run build || true
+
+      - name: Bootstrap plugins package
+        run: |
+          npm -C plugins ci || npm -C plugins i
+          npm -C plugins run build || true
 
       - name: Run tests
         id: tests
