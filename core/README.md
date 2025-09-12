@@ -79,34 +79,46 @@ manager.on("voiceCreate", (player, evt) => {
 });
 ```
 
-## Available Plugins
+### TTS (Interrupt Mode)
 
-### YouTubePlugin
+Play short text-to-speech messages without losing music progress. The player pauses music, plays TTS on a dedicated AudioPlayer,
+then resumes.
 
-Supports YouTube videos and playlists.
+- Requirements: `@ziplayer/plugin` with `TTSPlugin` installed and registered in `PlayerManager`.
 
-```typescript
-import { YouTubePlugin } from "@ziplayer/plugin";
-const youtube = new YouTubePlugin();
+```ts
+import { PlayerManager } from "ziplayer";
+import { TTSPlugin, YouTubePlugin, SoundCloudPlugin, SpotifyPlugin } from "@ziplayer/plugin";
+
+const manager = new PlayerManager({
+	plugins: [new TTSPlugin({ defaultLang: "vi" }), new YouTubePlugin(), new SoundCloudPlugin(), new SpotifyPlugin()],
+});
+
+// Create a player with TTS interrupt enabled
+const player = manager.create(guildId, {
+	tts: {
+		createPlayer: true, // pre-create the internal TTS AudioPlayer
+		interrupt: true, // pause music, swap to TTS, then resume
+		volume: 1, // 1 => 100%
+	},
+});
+
+await player.connect(voiceChannel);
+
+// Trigger TTS by playing a TTS query (depends on your TTS plugin)
+await player.play("tts: xin chào mọi người", userId);
+
+// Listen to TTS lifecycle events
+manager.on("ttsStart", (plr, { track }) => console.log("TTS start", track?.title));
+manager.on("ttsEnd", (plr) => console.log("TTS end"));
 ```
 
-### SoundCloudPlugin
+Notes
 
-Supports SoundCloud tracks and playlists.
-
-```typescript
-import { SoundCloudPlugin } from "@ziplayer/plugin";
-const soundcloud = new SoundCloudPlugin();
-```
-
-### SpotifyPlugin
-
-Supports Spotify tracks, albums, and playlists (requires fallback plugin for streaming).
-
-```typescript
-import { SpotifyPlugin } from "@ziplayer/plugin";
-const spotify = new SpotifyPlugin();
-```
+- The detection uses track.source that includes "tts" or query starting with `tts:`.
+- If you need more control, call `player.interruptWithTTSTrack(track)` after building a TTS track via your plugin.
+- For CPU-heavy TTS generation, consider offloading to `worker_threads` or a separate process and pass a stream/buffer to the
+  plugin.
 
 ## Creating Custom Plugins
 

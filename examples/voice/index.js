@@ -36,6 +36,14 @@ Manager.on("willPlay", (plr, track, upcomming) => {
 	plr.userdata?.channel?.send?.(`Upcomming: **${track.title}**, and \n${upcomming.map((t) => `${t.title}\n`)}`);
 });
 
+// TTS lifecycle
+Manager.on("ttsStart", (plr, { track }) => {
+	plr.userdata?.channel?.send?.(`TTS speaking: ${track?.title || "<inline>"}`);
+});
+Manager.on("ttsEnd", (plr) => {
+	plr.userdata?.channel?.send?.(`TTS finished, resuming music`);
+});
+
 // Voice recognition from voiceExt
 Manager.on("voiceCreate", async (plr, evt) => {
 	const userTag = evt.user?.tag || evt.userId;
@@ -122,6 +130,8 @@ client.on("messageCreate", async (message) => {
 			selfDeaf: true,
 			leaveOnEmpty: false,
 			leaveOnEnd: false,
+			// Enable TTS interrupt mode on this player
+			tts: { createPlayer: true, interrupt: true, volume: 1 },
 			// Choose extensions for this player (by name or instances)
 			extensions: ["voiceExt"],
 		});
@@ -139,8 +149,31 @@ client.on("messageCreate", async (message) => {
 		if (!plr || !plr.connection) return message.channel.send("Use !join first so I can speak.");
 		const query = `tts: ${text}`; // see TTSPlugin formats
 		await plr.play(query, message.author.id).catch(() => null);
+	} else if (command === "play") {
+		if (!args[0]) return message.channel.send("❌ | Please provide a song name or URL");
+		if (!message.member.voice.channel) return message.channel.send("❌ | You must be in a voice channel");
+		const player = Manager.create(message.guild.id, {
+			userdata: {
+				channel: message.channel,
+			},
+			selfDeaf: true,
+		});
+		try {
+			if (!player.connection) await player.connect(message.member.voice.channel);
+			const success = await player.play(args.join(" ")).catch((e) => {
+				console.log(e);
+
+				return message.channel.send("❌ | No results found");
+			});
+
+			if (success) message.channel.send(`✅ | Enqueued **${args.join(" ")}**`);
+		} catch (e) {
+			console.log(e);
+
+			return message.channel.send("❌ | Could not join your voice channel");
+		}
+		return;
 	}
-	
 });
 
 client.login(process.env.TOKEN);
