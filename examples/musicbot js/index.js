@@ -120,3 +120,13 @@ player.on("willPlay", (player, track, upcomming) => {
 });
 
 client.login(process.env.TOKEN);
+
+process.on("uncaughtException", function (err) {
+	console.log("Caught exception: " + err);
+	console.log(err.stack);
+});
+
+process.on("unhandledRejection", function (err) {
+	console.log("Handled exception: " + err);
+	console.log(err.stack);
+});

@@ -17,7 +17,7 @@ const client = new Client({
 
 const Manager = new PlayerManager({
 	plugins: [new TTSPlugin({ defaultLang: "vi" }), new YouTubePlugin(), new SoundCloudPlugin(), new SpotifyPlugin()],
-	extensions: [new voiceExt(null, { client, lang: "vi-VN", minimalVoiceMessageDuration: 1 })],
+	extensions: [new voiceExt(null, { client, lang: "en-US", minimalVoiceMessageDuration: 1 })],
 });
 
 // Basic events
@@ -30,7 +30,7 @@ Manager.on("queueAdd", (plr, track) => {
 Manager.on("playerError", (plr, error) => {
 	console.log(`[${plr.guildId}] Player error:`, error);
 });
-Manager.on("debug", console.log);
+// Manager.on("debug", console.log);
 Manager.on("willPlay", (plr, track, upcomming) => {
 	console.log(`${track.title} will play next!`);
 	plr.userdata?.channel?.send?.(`Upcomming: **${track.title}**, and \n${upcomming.map((t) => `${t.title}\n`)}`);
@@ -92,6 +92,10 @@ Manager.on("voiceCreate", async (plr, evt) => {
 
 			channel.send(suss ? `✅ | **${query}**` : `❌ | **${query}**`);
 		},
+		"xóa hàng đợi": async () => {
+			player.queue.clear();
+			channel.send("Queue Clear");
+		},
 	};
 
 	for (const [pattern, action] of Object.entries(commands)) {
@@ -136,6 +140,17 @@ client.on("messageCreate", async (message) => {
 		const query = `tts: ${text}`; // see TTSPlugin formats
 		await plr.play(query, message.author.id).catch(() => null);
 	}
+	
 });
 
 client.login(process.env.TOKEN);
+
+process.on("uncaughtException", function (err) {
+	console.log("Caught exception: " + err);
+	console.log(err.stack);
+});
+
+process.on("unhandledRejection", function (err) {
+	console.log("Handled exception: " + err);
+	console.log(err.stack);
+});

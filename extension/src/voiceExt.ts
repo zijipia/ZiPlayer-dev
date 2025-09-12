@@ -62,6 +62,10 @@ export class voiceExt extends BaseExtension {
 
 	private client?: any;
 	private speechOptions: SpeechOptions;
+	// Guards to avoid duplicate listener attachment and per-user re-subscribes
+	private _speakingEmitter?: any;
+	private _speakingAttached = false;
+	private _activeSpeakers = new Set<string>();
 
 	constructor(player: Player | null = null, opts?: Partial<SpeechOptions> & { client?: any }) {
 		super();
@@ -127,6 +131,9 @@ export class voiceExt extends BaseExtension {
 			try {
 				const conn = (this.player as any)?.connection;
 				conn?.receiver?.speaking?.removeAllListeners?.();
+				this._speakingAttached = false;
+				this._speakingEmitter = undefined;
+				this._activeSpeakers.clear();
 			} catch {}
 		});
 	}
@@ -148,6 +155,14 @@ export class voiceExt extends BaseExtension {
 			return;
 		}
 
+		// Re-attach only if emitter changed; otherwise guard against duplicates
+		if (this._speakingEmitter !== speaking) {
+			this._speakingEmitter = speaking;
+			this._speakingAttached = false;
+		}
+		if (this._speakingAttached) return;
+		this._speakingAttached = true;
+
 		speaking.on("start", (userId: string) => {
 			this.debug(`User ${userId} started speaking`);
 
@@ -168,6 +183,12 @@ export class voiceExt extends BaseExtension {
 				}
 			}
 
+			// Avoid duplicate subscribe calls for the same active speaker (prevents listener buildup)
+			if (this._activeSpeakers.has(userId)) {
+				this.debug(`Already subscribed to ${userId}, skipping duplicate`);
+				return;
+			}
+
 			// Prepare a per-session options override via onVoiceChange (non-blocking)
 			const channelId = String(connection?.joinConfig?.channelId ?? "");
 			const guildId = String(this.player?.guildId ?? "");
@@ -186,6 +207,7 @@ export class voiceExt extends BaseExtension {
 				return undefined;
 			});
 
+			this._activeSpeakers.add(userId);
 			const opusStream = connection.receiver.subscribe(userId, {
 				end: {
 					// EndBehaviorType.AfterSilence === 1
@@ -218,6 +240,7 @@ export class voiceExt extends BaseExtension {
 				.pipe(new PcmStream())
 				.on("data", (d: Buffer) => chunks.push(d))
 				.on("end", async () => {
+					this._activeSpeakers.delete(userId);
 					const overrides = (await pendingOverrides) || {};
 					const effective = { ...this.speechOptions, ...overrides } as SpeechOptions;
 					const delay = effective.postSilenceDelayMs ?? 2000;
