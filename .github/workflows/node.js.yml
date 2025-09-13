@@ -158,7 +158,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.ACTIONS_TOKEN }}
           script: |
             const marker = '<!-- test-report -->';
             const status = `${{ steps.tests.outputs.status }}` || 'unknown';
