@@ -265,10 +265,12 @@ export class YouTubePlugin extends BasePlugin {
 		const offset = opts.offset ?? 0;
 		const limit = opts.limit ?? 5;
 
-		const relatedfilter = related.filter((tr: any) => !(opts?.history ?? []).some((t) => t.url === tr.url));
+		const relatedfilter = related.filter(
+			(tr: any) => tr.content_type === "VIDEO" && !(opts?.history ?? []).some((t) => t.url === tr.url),
+		);
 
 		return relatedfilter.slice(offset, offset + limit).map((v: any) => {
-			const id = v.id || v.video_id || v.videoId || v.content_id;
+			const id = v?.id || v?.video_id || v?.videoId || v?.content_id;
 			const videometa = v?.metadata;
 			return {
 				id: String(id),

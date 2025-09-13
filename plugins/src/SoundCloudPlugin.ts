@@ -32,16 +32,18 @@ export class SoundCloudPlugin extends BasePlugin {
 
 	canHandle(query: string): boolean {
 		const q = (query || "").trim().toLowerCase();
-		// Handle only SoundCloud URLs directly
-		if (q.startsWith("http")) {
+		const isUrl = q.startsWith("http://") || q.startsWith("https://");
+		if (isUrl) {
 			return isValidSoundCloudHost(query);
 		}
-		// Avoid intercepting explicit patterns for other extractors (e.g., TTS)
+
+		// Avoid intercepting explicit patterns for other extractors
 		if (q.startsWith("tts:") || q.startsWith("say ")) return false;
-		// Heuristic: prefer SoundCloud for generic text when it mentions soundcloud
-		if (q.includes("soundcloud")) return true;
-		// Otherwise, do not greedily claim generic queries
-		return false;
+		if (q.startsWith("spotify:") || q.includes("open.spotify.com")) return false;
+		if (q.includes("youtube")) return false;
+
+		// Treat remaining non-URL free text as searchable
+		return true;
 	}
 
 	validate(url: string): boolean {

@@ -341,6 +341,7 @@ export class voiceExt extends BaseExtension {
 		this.debug(`Sending ${monoBuffer.length} bytes to Google Speech (lang=${lang})`);
 
 		try {
+			//see https://cloud.google.com/speech-to-text/v2/docs/recognizers
 			const response = await axios({
 				url: `https://www.google.com/speech-api/v2/recognize?output=json&lang=${lang}&key=${key}&pFilter=${profanityFilter}`,
 				headers: { "Content-Type": "audio/l16; rate=48000; channels=1" },
@@ -376,7 +377,9 @@ export class voiceExt extends BaseExtension {
 		// Fallback: Use a shared browser key commonly used for dev/testing.
 		// This is intended for convenience in non-production scenarios.
 		const fallback = "AIzaSyBOti4mM-6x9WDnZIjIeyEU21OpBXqWBgw";
-		this.debug("No GSPEECH_V2_KEY provided — using a shared fallback key (dev/testing). Set your own key to control quota.");
+		this.debug(
+			"No GSPEECH_V2_KEY provided — using a shared fallback key (dev/testing). Set your own key to control quota. See https://cloud.google.com/speech-to-text/v2/docs/recognizers",
+		);
 		return fallback;
 	}
 

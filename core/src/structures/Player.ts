@@ -423,29 +423,41 @@ export class Player extends EventEmitter {
 	}
 
 	private async generateWillNext(): Promise<void> {
-		const willnext = this.queue.willNextTrack();
 
 		const lastTrack = this.queue.previousTracks[this.queue.previousTracks.length - 1] ?? this.queue.currentTrack;
-		const plugin = this.pluginManager.findPlugin(lastTrack.url) || this.pluginManager.get(lastTrack.source);
-		if (plugin && typeof plugin.getRelatedTracks === "function") {
+		if (!lastTrack) return;
+
+		// Build list of candidate plugins: preferred first, then others with getRelatedTracks
+		const preferred = this.pluginManager.findPlugin(lastTrack.url) || this.pluginManager.get(lastTrack.source);
+		const all = this.pluginManager.getAll();
+		const candidates = [
+			...(preferred ? [preferred] : []),
+			...all.filter((p) => p !== preferred),
+		].filter((p) => typeof (p as any).getRelatedTracks === "function");
+
+		for (const p of candidates) {
 			try {
+				this.debug(`[Player] Trying related from plugin: ${p.name}`);
 				const related = await this.withTimeout(
-					plugin.getRelatedTracks(lastTrack.url, {
+					(p as any).getRelatedTracks(lastTrack.url, {
 						limit: 10,
 						history: this.queue.previousTracks,
 					}),
-					"getRelatedTracks timed out",
+					`getRelatedTracks timed out for ${p.name}`,
 				);
 
-				if (related && related.length > 0) {
+				if (Array.isArray(related) && related.length > 0) {
 					const randomchoice = Math.floor(Math.random() * related.length);
 					const nextTrack = this.queue.nextTrack ? this.queue.nextTrack : related[randomchoice];
 					this.queue.willNextTrack(nextTrack);
-					this.debug(`[Player] Will next track if autoplay: ${nextTrack?.title}`);
+					this.debug(`[Player] Will next track if autoplay: ${nextTrack?.title} (via ${p.name})`);
 					this.emit("willPlay", nextTrack, related);
+					return; // success
 				}
+				this.debug(`[Player] ${p.name} returned no related tracks`);
 			} catch (err) {
-				this.debug(`[Player] getRelatedTracks error:`, err);
+				this.debug(`[Player] getRelatedTracks error from ${p.name}:`, err);
+				// try next candidate
 			}
 		}
 	}
@@ -642,6 +654,54 @@ export class Player extends EventEmitter {
 	clearQueue(): void {
 		this.debug(`[Player] clearQueue called`);
 		this.queue.clear();
+	}
+
+	/**
+	 * Insert a track or list of tracks into the upcoming queue at a specific position (0 = play after current).
+	 * - If `query` is a string, performs a search and inserts resulting tracks (playlist supported).
+	 * - If a Track or Track[] is provided, inserts directly.
+	 * Does not auto-start playback; it only modifies the queue.
+	 */
+	async insert(query: string | Track | Track[], index: number, requestedBy?: string): Promise<boolean> {
+		try {
+			this.debug(`[Player] insert called at index ${index} with type: ${typeof query}`);
+			let tracksToAdd: Track[] = [];
+			let isPlaylist = false;
+
+			if (typeof query === "string") {
+				const searchResult = await this.search(query, requestedBy || "Unknown");
+				tracksToAdd = searchResult.tracks || [];
+				isPlaylist = !!searchResult.playlist;
+			} else if (Array.isArray(query)) {
+				tracksToAdd = query;
+				isPlaylist = query.length > 1;
+			} else if (query) {
+				tracksToAdd = [query];
+			}
+
+			if (!tracksToAdd || tracksToAdd.length === 0) {
+				this.debug(`[Player] insert: no tracks resolved`);
+				throw new Error("No tracks to insert");
+			}
+
+			if (tracksToAdd.length === 1) {
+				this.queue.insert(tracksToAdd[0], index);
+				this.emit("queueAdd", tracksToAdd[0]);
+				this.debug(`[Player] Inserted track at index ${index}: ${tracksToAdd[0].title}`);
+			} else {
+				this.queue.insertMultiple(tracksToAdd, index);
+				this.emit("queueAddList", tracksToAdd);
+				this.debug(
+					`[Player] Inserted ${tracksToAdd.length} ${isPlaylist ? "playlist " : ""}tracks at index ${index}`,
+				);
+			}
+
+			return true;
+		} catch (error) {
+			this.debug(`[Player] insert error:`, error);
+			this.emit("playerError", error as Error);
+			return false;
+		}
 	}
 
 	remove(index: number): Track | null {

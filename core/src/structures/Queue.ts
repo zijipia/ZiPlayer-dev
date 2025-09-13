@@ -16,6 +16,43 @@ export class Queue {
 		this.tracks.push(...tracks);
 	}
 
+	/** Insert a track at a specific upcoming position (0 = next) */
+	insert(track: Track, index: number): void {
+		if (!Number.isFinite(index)) {
+			this.tracks.push(track);
+			return;
+		}
+		const i = Math.max(0, Math.min(Math.floor(index), this.tracks.length));
+		if (i === this.tracks.length) {
+			this.tracks.push(track);
+			return;
+		}
+		if (i <= 0) {
+			this.tracks.unshift(track);
+			return;
+		}
+		this.tracks.splice(i, 0, track);
+	}
+
+	/** Insert multiple tracks at a specific upcoming position, preserving order */
+	insertMultiple(tracks: Track[], index: number): void {
+		if (!Array.isArray(tracks) || tracks.length === 0) return;
+		if (!Number.isFinite(index)) {
+			this.tracks.push(...tracks);
+			return;
+		}
+		const i = Math.max(0, Math.min(Math.floor(index), this.tracks.length));
+		if (i === 0) {
+			this.tracks = [...tracks, ...this.tracks];
+			return;
+		}
+		if (i === this.tracks.length) {
+			this.tracks.push(...tracks);
+			return;
+		}
+		this.tracks.splice(i, 0, ...tracks);
+	}
+
 	remove(index: number): Track | null {
 		if (index < 0 || index >= this.tracks.length) return null;
 		return this.tracks.splice(index, 1)[0];
