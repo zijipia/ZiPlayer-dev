@@ -29,6 +29,81 @@ export class YouTubePlugin extends BasePlugin {
 		Log.setLevel(0);
 	}
 
+	// Build a Track from various YouTube object shapes (search item, playlist item, watch_next feed, basic_info, info)
+	private buildTrack(raw: any, requestedBy: string, extra?: { playlist?: string }): Track {
+		const pickFirst = (...vals: any[]) => vals.find((v) => v !== undefined && v !== null && v !== "");
+
+		// Try to resolve from multiple common shapes
+		const id = pickFirst(
+			raw?.id,
+			raw?.video_id,
+			raw?.videoId,
+			raw?.content_id,
+			raw?.identifier,
+			raw?.basic_info?.id,
+			raw?.basic_info?.video_id,
+			raw?.basic_info?.videoId,
+			raw?.basic_info?.content_id,
+		);
+
+		const title = pickFirst(
+			raw?.metadata?.title?.text,
+			raw?.title?.text,
+			raw?.title,
+			raw?.headline,
+			raw?.basic_info?.title,
+			"Unknown title",
+		);
+
+		const durationValue = pickFirst(
+			raw?.length_seconds,
+			raw?.duration?.seconds,
+			raw?.duration?.text,
+			raw?.duration,
+			raw?.length_text,
+			raw?.basic_info?.duration,
+		);
+		const duration = Number(toSeconds(durationValue)) || 0;
+
+		const thumb = pickFirst(
+			raw?.thumbnails?.[0]?.url,
+			raw?.thumbnail?.[0]?.url,
+			raw?.thumbnail?.url,
+			raw?.thumbnail?.thumbnails?.[0]?.url,
+			raw?.content_image?.image?.[0]?.url,
+			raw?.basic_info?.thumbnail?.[0]?.url,
+			raw?.basic_info?.thumbnail?.[raw?.basic_info?.thumbnail?.length - 1]?.url,
+			raw?.thumbnails?.[raw?.thumbnails?.length - 1]?.url,
+		);
+
+		const author = pickFirst(raw?.author?.name, raw?.author, raw?.channel?.name, raw?.owner?.name, raw?.basic_info?.author);
+
+		const views = pickFirst(
+			raw?.view_count,
+			raw?.views,
+			raw?.short_view_count,
+			raw?.stats?.view_count,
+			raw?.basic_info?.view_count,
+		);
+
+		const url = pickFirst(raw?.url, id ? `https://www.youtube.com/watch?v=${id}` : undefined);
+
+		return {
+			id: String(id),
+			title: String(title),
+			url: String(url),
+			duration,
+			thumbnail: thumb,
+			requestedBy,
+			source: this.name,
+			metadata: {
+				author,
+				views,
+				...(extra?.playlist ? { playlist: extra.playlist } : {}),
+			},
+		} as Track;
+	}
+
 	canHandle(query: string): boolean {
 		const q = (query || "").trim().toLowerCase();
 		const isUrl = q.startsWith("http://") || q.startsWith("https://");
@@ -54,7 +129,7 @@ export class YouTubePlugin extends BasePlugin {
 	validate(url: string): boolean {
 		try {
 			const parsed = new URL(url);
-			const allowedHosts = ["youtube.com", "www.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"];
+			const allowedHosts = ["youtube.com", "www.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be", "m.youtube.com"];
 			return allowedHosts.includes(parsed.hostname.toLowerCase());
 		} catch (e) {
 			return false;
@@ -67,29 +142,33 @@ export class YouTubePlugin extends BasePlugin {
 		if (this.validate(query)) {
 			const listId = this.extractListId(query);
 			if (listId) {
+				if (this.isMixListId(listId)) {
+					const anchorVideoId = this.extractVideoId(query);
+					if (anchorVideoId) {
+						try {
+							const info: any = await (this.searchClient as any).getInfo(anchorVideoId);
+							console.log(info);
+							const feed: any[] = info?.watch_next_feed || [];
+							const tracks: Track[] = feed
+								.filter((tr: any) => tr?.content_type === "VIDEO")
+								.map((v: any) => this.buildTrack(v, requestedBy, { playlist: listId }));
+							const { basic_info } = info;
+
+							const currTrack = this.buildTrack(basic_info, requestedBy);
+							tracks.unshift(currTrack);
+							return {
+								tracks,
+								playlist: { name: "YouTube Mix", url: query, thumbnail: tracks[0]?.thumbnail },
+							};
+						} catch {
+							// ignore and fall back to normal playlist handling below
+						}
+					}
+				}
 				try {
-					const playlist: any = await (this.client as any).getPlaylist(listId);
+					const playlist: any = await (this.searchClient as any).getPlaylist(listId);
 					const videos: any[] = playlist?.videos || playlist?.items || [];
-
-					const tracks: Track[] = videos.map((v: any) => {
-						const id = v.id || v.video_id || v.videoId;
-						const title = v.title?.text ?? v.title;
-						const duration = toSeconds(v.duration?.text ?? v.duration);
-						const thumb = v.thumbnails?.[0]?.url || v.thumbnail?.url;
-						const author = v.author?.name ?? v.channel?.name;
-						const views = v.view_count ?? v.views;
-
-						return {
-							id: String(id),
-							title,
-							url: `https://www.youtube.com/watch?v=${id}`,
-							duration: Number(duration) || 0,
-							thumbnail: thumb,
-							requestedBy,
-							source: this.name,
-							metadata: { author, views, playlist: listId },
-						} as Track;
-					});
+					const tracks: Track[] = videos.map((v: any) => this.buildTrack(v, requestedBy, { playlist: listId }));
 
 					return {
 						tracks,
@@ -109,23 +188,7 @@ export class YouTubePlugin extends BasePlugin {
 			if (!videoId) throw new Error("Invalid YouTube URL");
 
 			const info = await this.client.getBasicInfo(videoId);
-			const basic = (info as any).basic_info ?? {};
-
-			const track: Track = {
-				id: videoId,
-				title: basic.title ?? (info as any).title ?? "Unknown title",
-				url: `https://www.youtube.com/watch?v=${videoId}`,
-				duration: toSeconds(basic.duration ?? (info as any).duration) ?? 0,
-				thumbnail:
-					basic.thumbnail?.[0]?.url || basic.thumbnail?.[basic.thumbnail?.length - 1]?.url || (info as any).thumbnails?.[0]?.url,
-				requestedBy,
-				source: this.name,
-				metadata: {
-					author: basic.author ?? (info as any).author?.name,
-					views: (info as any).basic_info?.view_count ?? (info as any).view_count,
-				},
-			};
-
+			const track = this.buildTrack(info, requestedBy);
 			return { tracks: [track] };
 		}
 
@@ -135,26 +198,7 @@ export class YouTubePlugin extends BasePlugin {
 		});
 		const items: any[] = res?.items || res?.videos || res?.results || [];
 
-		const tracks: Track[] = items.slice(0, 10).map((v: any) => {
-			const id = v.id || v.video_id || v.videoId || v.identifier;
-			const title = v.title?.text ?? v.title ?? v.headline ?? "Unknown title";
-			const duration = toSeconds(v.duration?.text ?? v.duration?.seconds ?? v.duration ?? v.length_text);
-			const thumbnail = v.thumbnails?.[0]?.url || v.thumbnail?.url || v.thumbnail?.thumbnails?.[0]?.url;
-			const author = v.author?.name ?? v.channel?.name ?? v.owner?.name;
-			const views = v.view_count ?? v.views ?? v.short_view_count ?? v.stats?.view_count;
-
-			const track: Track = {
-				id: String(id),
-				title,
-				url: `https://www.youtube.com/watch?v=${id}`,
-				duration: Number(duration) || 0,
-				thumbnail,
-				requestedBy,
-				source: this.name,
-				metadata: { author, views },
-			};
-			return track;
-		});
+		const tracks: Track[] = items.slice(0, 10).map((v: any) => this.buildTrack(v, requestedBy));
 
 		return { tracks };
 	}
@@ -166,31 +210,27 @@ export class YouTubePlugin extends BasePlugin {
 		if (!listId) return [];
 
 		try {
+			// Attempt to handle dynamic Mix playlists via watch_next feed
+			if (this.isMixListId(listId)) {
+				const anchorVideoId = this.extractVideoId(url);
+				if (anchorVideoId) {
+					try {
+						const info: any = await (this.searchClient as any).getInfo(anchorVideoId);
+						const feed: any[] = info?.watch_next_feed || [];
+						return feed
+							.filter((tr: any) => tr?.content_type === "VIDEO")
+							.map((v: any) => this.buildTrack(v, requestedBy, { playlist: listId }));
+					} catch {}
+				}
+			}
+
 			const playlist: any = await (this.client as any).getPlaylist(listId);
 			const videos: any[] = playlist?.videos || playlist?.items || [];
-
+			console.log(playlist);
 			return videos.map((v: any) => {
-				const id = v.id || v.video_id || v.videoId;
-				const title = v.title?.text ?? v.title;
-				const duration = toSeconds(v.duration?.text ?? v.duration);
-				const thumb = v.thumbnails?.[0]?.url || v.thumbnail?.url;
-				const author = v.author?.name ?? v.channel?.name;
-				const views = v.view_count ?? v.views;
-
-				const track: Track = {
-					id: String(id),
-					title,
-					url: `https://www.youtube.com/watch?v=${id}`,
-					duration: Number(duration) || 0,
-					thumbnail: thumb,
-					requestedBy,
-					source: this.name,
-					metadata: { author, views, playlist: listId },
-				};
-				return track;
+				return this.buildTrack(v, requestedBy, { playlist: listId }); //ack;
 			});
 		} catch {
-			// If playlist fetch fails, return empty to keep optional contract intact
 			return [];
 		}
 	}
@@ -260,6 +300,11 @@ export class YouTubePlugin extends BasePlugin {
 	async getRelatedTracks(trackURL: string, opts: { limit?: number; offset?: number; history?: Track[] } = {}): Promise<Track[]> {
 		await this.ready;
 		const videoId = this.extractVideoId(trackURL);
+		if (!videoId) {
+			// If the last track URL is not a direct video URL (e.g., playlist URL),
+			// we cannot fetch related videos reliably.
+			return [];
+		}
 		const info: any = await await (this.searchClient as any).getInfo(videoId);
 		const related: any[] = info?.watch_next_feed || [];
 		const offset = opts.offset ?? 0;
@@ -269,20 +314,7 @@ export class YouTubePlugin extends BasePlugin {
 			(tr: any) => tr.content_type === "VIDEO" && !(opts?.history ?? []).some((t) => t.url === tr.url),
 		);
 
-		return relatedfilter.slice(offset, offset + limit).map((v: any) => {
-			const id = v?.id || v?.video_id || v?.videoId || v?.content_id;
-			const videometa = v?.metadata;
-			return {
-				id: String(id),
-				title: videometa.title.text ?? "Unknown title",
-				url: `https://www.youtube.com/watch?v=${id}`,
-				duration: Number(v.length_seconds || toSeconds(v.duration)) || 0,
-				thumbnail: v.thumbnails?.[0]?.url || v.thumbnail?.url || v.content_image?.image?.[0]?.url,
-				requestedBy: "auto",
-				source: this.name,
-				metadata: { author: v.author, views: v.view_count },
-			} as Track;
-		});
+		return relatedfilter.slice(offset, offset + limit).map((v: any) => this.buildTrack(v, "auto"));
 	}
 
 	async getFallback(track: Track): Promise<StreamInfo> {
@@ -315,6 +347,11 @@ export class YouTubePlugin extends BasePlugin {
 		} catch {
 			return null;
 		}
+	}
+
+	private isMixListId(listId: string): boolean {
+		// YouTube dynamic mixes typically start with 'RD'
+		return typeof listId === "string" && listId.toUpperCase().startsWith("RD");
 	}
 
 	private extractListId(input: string): string | null {

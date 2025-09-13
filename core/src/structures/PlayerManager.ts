@@ -83,6 +83,7 @@ export class PlayerManager extends EventEmitter {
 				if (typeof instance.active === "function") {
 					try {
 						instance.active({ manager: this, player });
+						this.debug(`[PlayerManager] Extension ${instance?.name} active`);
 					} catch (e) {
 						this.debug(`[PlayerManager] Extension activation error:`, e);
 					}
