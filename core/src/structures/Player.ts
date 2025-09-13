@@ -423,17 +423,15 @@ export class Player extends EventEmitter {
 	}
 
 	private async generateWillNext(): Promise<void> {
-
 		const lastTrack = this.queue.previousTracks[this.queue.previousTracks.length - 1] ?? this.queue.currentTrack;
 		if (!lastTrack) return;
 
 		// Build list of candidate plugins: preferred first, then others with getRelatedTracks
 		const preferred = this.pluginManager.findPlugin(lastTrack.url) || this.pluginManager.get(lastTrack.source);
 		const all = this.pluginManager.getAll();
-		const candidates = [
-			...(preferred ? [preferred] : []),
-			...all.filter((p) => p !== preferred),
-		].filter((p) => typeof (p as any).getRelatedTracks === "function");
+		const candidates = [...(preferred ? [preferred] : []), ...all.filter((p) => p !== preferred)].filter(
+			(p) => typeof (p as any).getRelatedTracks === "function",
+		);
 
 		for (const p of candidates) {
 			try {
@@ -615,6 +613,10 @@ export class Player extends EventEmitter {
 		return this.queue.loop(mode);
 	}
 
+	autoPlay(mode?: boolean): boolean {
+		return this.queue.autoPlay(mode);
+	}
+
 	setVolume(volume: number): boolean {
 		this.debug(`[Player] setVolume called: ${volume}`);
 		if (volume < 0 || volume > 200) return false;
@@ -691,9 +693,7 @@ export class Player extends EventEmitter {
 			} else {
 				this.queue.insertMultiple(tracksToAdd, index);
 				this.emit("queueAddList", tracksToAdd);
-				this.debug(
-					`[Player] Inserted ${tracksToAdd.length} ${isPlaylist ? "playlist " : ""}tracks at index ${index}`,
-				);
+				this.debug(`[Player] Inserted ${tracksToAdd.length} ${isPlaylist ? "playlist " : ""}tracks at index ${index}`);
 			}
 
 			return true;

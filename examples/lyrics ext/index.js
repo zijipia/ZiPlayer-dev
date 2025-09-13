@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-const { PlayerManager } = require("ziplayer");
+const { PlayerManager, getManager } = require("ziplayer");
 const { Client, GatewayIntentBits } = require("discord.js");
 const { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin } = require("@ziplayer/plugin");
 const { voiceExt, lyricsExt } = require("@ziplayer/extension");
@@ -59,7 +59,10 @@ client.on("messageCreate", async (message) => {
 		}
 		return;
 	}
-
+	if (command === "test") {
+		const mng = getManager();
+		console.log(mng);
+	}
 	const Player = Manager.get(message.guild.id);
 	if (!Player || !Player.isPlaying) return message.channel.send("❌ | No music is being played");
 

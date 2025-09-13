@@ -1,9 +1,13 @@
+
 {
 	"name": "ziplayer-dev-root",
 	"private": true,
-	"scripts": {
-		"test": "node --test",
-		"format": "npx prettier --ignore-path .gitignore --write .",
-		"format:check": "npx prettier --ignore-path .gitignore -l ."
-	}
+  "scripts": {
+    "test": "node --test",
+    "format": "npx prettier --ignore-path .gitignore --write .",
+    "format:check": "npx prettier --ignore-path .gitignore -l .",
+    "web:dev": "npm run dev --prefix page",
+    "web:build": "npm run build --prefix page",
+    "web:start": "npm run start --prefix page"
+  }
 }
