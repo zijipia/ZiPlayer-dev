@@ -130,7 +130,7 @@ jobs:
         run: |
           npm -C plugins ci || npm -C plugins i
           npm -C plugins run build || true
-          
+
       - name: Bootstrap extension package
         run: |
           npm -C extension ci || npm -C extension i
