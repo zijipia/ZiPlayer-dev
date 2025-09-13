@@ -188,6 +188,7 @@ npm test
 ```
 
 Notes
+<img width="1000" height="1000" alt="Untitled-1" src="https://github.com/user-attachments/assets/4e7855e8-6044-4c49-90bd-867436173b4f" />
 
 - Tests focus on core data structures (Queue, PluginManager, Player/Manager basics) and plugin logic that does not require network
   calls.
