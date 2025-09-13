@@ -2,7 +2,31 @@ import { EventEmitter } from "events";
 import { Player } from "./Player";
 import { PlayerManagerOptions, PlayerOptions, Track, SourcePlugin } from "../types";
 
+const GLOBAL_MANAGER_KEY: symbol = Symbol.for("ziplayer.PlayerManager.instance");
+export const getGlobalManager = (): PlayerManager | null => {
+	try {
+		const instance = (globalThis as any)[GLOBAL_MANAGER_KEY];
+		if (!instance) {
+			console.debug("[PlayerManager] No global instance found");
+			return null;
+		}
+		return instance as PlayerManager;
+	} catch (error) {
+		console.error("[PlayerManager] Error getting global instance:", error);
+		return null;
+	}
+};
+const setGlobalManager = (instance: PlayerManager): void => {
+	try {
+		(globalThis as any)[GLOBAL_MANAGER_KEY] = instance;
+		console.debug("[PlayerManager] Global instance set successfully");
+	} catch (error) {
+		console.error("[PlayerManager] Error setting global instance:", error);
+	}
+};
+
 export class PlayerManager extends EventEmitter {
+	private static instance: PlayerManager | null = null;
 	private players: Map<string, Player> = new Map();
 	private plugins: SourcePlugin[];
 	private extensions: any[];
@@ -34,6 +58,8 @@ export class PlayerManager extends EventEmitter {
 			}
 		}
 		this.extensions = options.extensions || [];
+
+		setGlobalManager(this);
 	}
 
 	private resolveGuildId(guildOrId: string | { id: string }): string {
@@ -83,6 +109,7 @@ export class PlayerManager extends EventEmitter {
 				if (typeof instance.active === "function") {
 					try {
 						instance.active({ manager: this, player });
+						this.debug(`[PlayerManager] Extension ${instance?.name} active`);
 					} catch (e) {
 						this.debug(`[PlayerManager] Extension activation error:`, e);
 					}
@@ -157,4 +184,13 @@ export class PlayerManager extends EventEmitter {
 		this.players.clear();
 		this.removeAllListeners();
 	}
+}
+
+export function getInstance(): PlayerManager | null {
+	const globalInst = getGlobalManager();
+	if (!globalInst) {
+		console.debug("[PlayerManager] Global instance not found, make sure to initialize with new PlayerManager(options)");
+		return null;
+	}
+	return globalInst;
 }

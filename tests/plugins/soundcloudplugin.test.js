@@ -13,8 +13,8 @@ test("SoundCloud validate and canHandle heuristics", () => {
 	assert.equal(sc.canHandle("https://soundcloud.com/user/track"), true);
 	// Free text mentioning soundcloud is handled
 	assert.equal(sc.canHandle("search soundcloud best tracks"), true);
-	// Generic text without soundcloud is not greedily handled
-	assert.equal(sc.canHandle("random search text"), false);
+	// Generic text  soundcloud is handled
+	assert.equal(sc.canHandle("random search text"), true);
 	// TTS pattern is ignored
 	assert.equal(sc.canHandle("tts: hello"), false);
 });

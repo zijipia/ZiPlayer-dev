@@ -3,7 +3,7 @@ import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
 const SoundCloud = require("@zibot/scdl");
 import { URL } from "url";
 
-const ALLOWED_SOUNDCLOUD_HOSTS = ["soundcloud.com", "www.soundcloud.com"];
+const ALLOWED_SOUNDCLOUD_HOSTS = ["soundcloud.com", "www.soundcloud.com", "m.soundcloud.com"];
 
 function isValidSoundCloudHost(maybeUrl: string): boolean {
 	try {
@@ -32,16 +32,18 @@ export class SoundCloudPlugin extends BasePlugin {
 
 	canHandle(query: string): boolean {
 		const q = (query || "").trim().toLowerCase();
-		// Handle only SoundCloud URLs directly
-		if (q.startsWith("http")) {
+		const isUrl = q.startsWith("http://") || q.startsWith("https://");
+		if (isUrl) {
 			return isValidSoundCloudHost(query);
 		}
-		// Avoid intercepting explicit patterns for other extractors (e.g., TTS)
+
+		// Avoid intercepting explicit patterns for other extractors
 		if (q.startsWith("tts:") || q.startsWith("say ")) return false;
-		// Heuristic: prefer SoundCloud for generic text when it mentions soundcloud
-		if (q.includes("soundcloud")) return true;
-		// Otherwise, do not greedily claim generic queries
-		return false;
+		if (q.startsWith("spotify:") || q.includes("open.spotify.com")) return false;
+		if (q.includes("youtube")) return false;
+
+		// Treat remaining non-URL free text as searchable
+		return true;
 	}
 
 	validate(url: string): boolean {
@@ -50,6 +52,16 @@ export class SoundCloudPlugin extends BasePlugin {
 
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		await this.ready;
+
+		// If the query is a URL but not a SoundCloud URL, do not handle it here
+		// This prevents hijacking e.g. YouTube/Spotify links as free-text searches.
+		try {
+			const q = (query || "").trim().toLowerCase();
+			const isUrl = q.startsWith("http://") || q.startsWith("https://");
+			if (isUrl && !this.validate(query)) {
+				return { tracks: [] };
+			}
+		} catch {}
 
 		try {
 			if (isValidSoundCloudHost(query)) {
