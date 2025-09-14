@@ -4,6 +4,7 @@ export class Queue {
 	private tracks: Track[] = [];
 	private current: Track | null = null;
 	private history: Track[] = [];
+	private related: Track[] = [];
 	private _autoPlay = false;
 	private _loop: LoopMode = "off";
 	private willnext: Track | null = null;
@@ -125,9 +126,15 @@ export class Queue {
 	willNextTrack(track?: Track): Track | null {
 		if (track) {
 			this.willnext = track;
-			return this.willnext;
 		}
 		return this.willnext;
+	}
+
+	relatedTracks(track?: Track[]): Track[] | null {
+		if (track) {
+			this.related = track;
+		}
+		return this.related;
 	}
 
 	getTracks(): Track[] {
