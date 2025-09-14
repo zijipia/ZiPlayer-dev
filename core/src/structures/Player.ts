@@ -447,8 +447,16 @@ export class Player extends EventEmitter {
 			await entersState(ttsPlayer, AudioPlayerStatus.Playing, 5_000).catch(() => null);
 			// Derive timeout from resource/track duration when available, with a sensible cap
 			const md: any = (resource as any)?.metadata ?? {};
-			const declared = typeof md.duration === "number" ? md.duration : typeof next?.duration === "number" ? next.duration : undefined;
-			const declaredMs = declared ? (declared > 1000 ? declared : declared * 1000) : undefined;
+			const declared =
+				typeof md.duration === "number" ? md.duration
+				: typeof next?.duration === "number" ? next.duration
+				: undefined;
+			const declaredMs =
+				declared ?
+					declared > 1000 ?
+						declared
+					:	declared * 1000
+				:	undefined;
 			const cap = this.options?.tts?.Max_Time_TTS ?? 60_000;
 			const idleTimeout = declaredMs ? Math.min(cap, Math.max(1_000, declaredMs + 1_500)) : cap;
 			await entersState(ttsPlayer, AudioPlayerStatus.Idle, idleTimeout).catch(() => null);
@@ -510,16 +518,16 @@ export class Player extends EventEmitter {
 			}
 		};
 
-			const inputType = mapToStreamType(streamInfo.type);
-			return createAudioResource(streamInfo.stream, {
-				// Prefer plugin-provided metadata (e.g., precise duration), fallback to track fields
-				metadata: {
-					...(track as any),
-					...((streamInfo as any)?.metadata || {}),
-				},
-				inputType,
-				inlineVolume: true,
-			});
+		const inputType = mapToStreamType(streamInfo.type);
+		return createAudioResource(streamInfo.stream, {
+			// Prefer plugin-provided metadata (e.g., precise duration), fallback to track fields
+			metadata: {
+				...(track as any),
+				...((streamInfo as any)?.metadata || {}),
+			},
+			inputType,
+			inlineVolume: true,
+		});
 	}
 
 	private async generateWillNext(): Promise<void> {
