@@ -41,6 +41,89 @@ export class Player extends EventEmitter {
 	private volumeInterval: NodeJS.Timeout | null = null;
 	private skipLoop = false;
 
+	/**
+	 * Start playing a specific track immediately, replacing the current resource.
+	 */
+	private async startTrack(track: Track): Promise<boolean> {
+		try {
+			// Find plugin that can handle this track
+			const plugin = this.pluginManager.findPlugin(track.url) || this.pluginManager.get(track.source);
+
+			if (!plugin) {
+				this.debug(`[Player] No plugin found for track: ${track.title}`);
+				throw new Error(`No plugin found for track: ${track.title}`);
+			}
+
+			this.debug(`[Player] Getting stream for track: ${track.title}`);
+			this.debug(`[Player] Using plugin: ${plugin.name}`);
+			this.debug(`[Track] Track Info:`, track);
+			let streamInfo;
+			try {
+				streamInfo = await this.withTimeout(plugin.getStream(track), "getStream timed out");
+			} catch (streamError) {
+				this.debug(`[Player] getStream failed, trying getFallback:`, streamError);
+				const allplugs = this.pluginManager.getAll();
+				for (const p of allplugs) {
+					if (typeof (p as any).getFallback !== "function") {
+						continue;
+					}
+					try {
+						streamInfo = await this.withTimeout((p as any).getFallback(track), `getFallback timed out for plugin ${p.name}`);
+						if (!(streamInfo as any).stream) continue;
+						this.debug(`[Player] getFallback succeeded with plugin ${p.name} for track: ${track.title}`);
+						break;
+					} catch (fallbackError) {
+						this.debug(`[Player] getFallback failed with plugin ${p.name}:`, fallbackError);
+					}
+				}
+
+				if (!(streamInfo as any)?.stream) {
+					throw new Error(`All getFallback attempts failed for track: ${track.title}`);
+				}
+				this.debug(streamInfo);
+			}
+
+			function mapToStreamType(type: string): StreamType {
+				switch (type) {
+					case "webm/opus":
+						return StreamType.WebmOpus;
+					case "ogg/opus":
+						return StreamType.OggOpus;
+					case "arbitrary":
+						return StreamType.Arbitrary;
+					default:
+						return StreamType.Arbitrary;
+				}
+			}
+
+			let stream: Readable = (streamInfo as any).stream;
+			let inputType = mapToStreamType((streamInfo as any).type);
+
+			this.currentResource = createAudioResource(stream, {
+				metadata: track,
+				inputType,
+				inlineVolume: true,
+			});
+
+			// Apply initial volume using the resource's VolumeTransformer
+			if (this.volumeInterval) {
+				clearInterval(this.volumeInterval);
+				this.volumeInterval = null;
+			}
+			this.currentResource.volume?.setVolume(this.volume / 100);
+
+			this.debug(`[Player] Playing resource for track: ${track.title}`);
+			this.audioPlayer.play(this.currentResource);
+
+			await entersState(this.audioPlayer, AudioPlayerStatus.Playing, 5_000);
+			return true;
+		} catch (error) {
+			this.debug(`[Player] startTrack error:`, error);
+			this.emit("playerError", error as Error, track);
+			return false;
+		}
+	}
+
 	// TTS support
 	private ttsPlayer: DiscordAudioPlayer | null = null;
 	private ttsQueue: Array<Track> = [];
@@ -362,7 +445,13 @@ export class Player extends EventEmitter {
 
 			// Wait until TTS starts then finishes
 			await entersState(ttsPlayer, AudioPlayerStatus.Playing, 5_000).catch(() => null);
-			await entersState(ttsPlayer, AudioPlayerStatus.Idle, this.options?.tts?.Max_Time_TTS || 60_000).catch(() => null);
+			// Derive timeout from resource/track duration when available, with a sensible cap
+			const md: any = (resource as any)?.metadata ?? {};
+			const declared = typeof md.duration === "number" ? md.duration : typeof next?.duration === "number" ? next.duration : undefined;
+			const declaredMs = declared ? (declared > 1000 ? declared : declared * 1000) : undefined;
+			const cap = this.options?.tts?.Max_Time_TTS ?? 60_000;
+			const idleTimeout = declaredMs ? Math.min(cap, Math.max(1_000, declaredMs + 1_500)) : cap;
+			await entersState(ttsPlayer, AudioPlayerStatus.Idle, idleTimeout).catch(() => null);
 
 			// Swap back and resume if needed
 			this.connection.subscribe(this.audioPlayer);
@@ -421,12 +510,16 @@ export class Player extends EventEmitter {
 			}
 		};
 
-		const inputType = mapToStreamType(streamInfo.type);
-		return createAudioResource(streamInfo.stream, {
-			metadata: track,
-			inputType,
-			inlineVolume: true,
-		});
+			const inputType = mapToStreamType(streamInfo.type);
+			return createAudioResource(streamInfo.stream, {
+				// Prefer plugin-provided metadata (e.g., precise duration), fallback to track fields
+				metadata: {
+					...(track as any),
+					...((streamInfo as any)?.metadata || {}),
+				},
+				inputType,
+				inlineVolume: true,
+			});
 	}
 
 	private async generateWillNext(): Promise<void> {
@@ -497,77 +590,7 @@ export class Player extends EventEmitter {
 		this.clearLeaveTimeout();
 
 		try {
-			// Find plugin that can handle this track
-			const plugin = this.pluginManager.findPlugin(track.url) || this.pluginManager.get(track.source);
-
-			if (!plugin) {
-				this.debug(`[Player] No plugin found for track: ${track.title}`);
-				throw new Error(`No plugin found for track: ${track.title}`);
-			}
-
-			this.debug(`[Player] Getting stream for track: ${track.title}`);
-			this.debug(`[Player] Using plugin: ${plugin.name}`);
-			this.debug(`[Track] Track Info:`, track);
-			let streamInfo;
-			try {
-				streamInfo = await this.withTimeout(plugin.getStream(track), "getStream timed out");
-			} catch (streamError) {
-				this.debug(`[Player] getStream failed, trying getFallback:`, streamError);
-				const allplugs = this.pluginManager.getAll();
-				for (const p of allplugs) {
-					if (typeof p.getFallback !== "function") {
-						continue;
-					}
-					try {
-						streamInfo = await this.withTimeout(p.getFallback(track), `getFallback timed out for plugin ${p.name}`);
-						if (!streamInfo.stream) continue;
-						this.debug(`[Player] getFallback succeeded with plugin ${p.name} for track: ${track.title}`);
-						break;
-					} catch (fallbackError) {
-						this.debug(`[Player] getFallback failed with plugin ${p.name}:`, fallbackError);
-					}
-				}
-				if (!streamInfo?.stream) {
-					throw new Error(`All getFallback attempts failed for track: ${track.title}`);
-				}
-				this.debug(streamInfo);
-			}
-
-			function mapToStreamType(type: string): StreamType {
-				switch (type) {
-					case "webm/opus":
-						return StreamType.WebmOpus;
-					case "ogg/opus":
-						return StreamType.OggOpus;
-					case "arbitrary":
-						return StreamType.Arbitrary;
-					default:
-						return StreamType.Arbitrary;
-				}
-			}
-
-			let stream: Readable = streamInfo.stream;
-			let inputType = mapToStreamType(streamInfo.type);
-
-			this.currentResource = createAudioResource(stream, {
-				metadata: track,
-				inputType,
-				inlineVolume: true,
-			});
-
-			// Apply initial volume using the resource's VolumeTransformer
-			if (this.volumeInterval) {
-				clearInterval(this.volumeInterval);
-				this.volumeInterval = null;
-			}
-			this.currentResource.volume?.setVolume(this.volume / 100);
-
-			this.debug(`[Player] Playing resource for track: ${track.title}`);
-			this.audioPlayer.play(this.currentResource);
-
-			await entersState(this.audioPlayer, AudioPlayerStatus.Playing, 5_000);
-
-			return true;
+			return await this.startTrack(track);
 		} catch (error) {
 			this.debug(`[Player] playNext error:`, error);
 			this.emit("playerError", error as Error, track);
@@ -616,6 +639,18 @@ export class Player extends EventEmitter {
 			return this.audioPlayer.stop();
 		}
 		return !!this.playNext();
+	}
+
+	/**
+	 * Go back to the previous track in history and play it.
+	 */
+	async previous(): Promise<boolean> {
+		this.debug(`[Player] previous called`);
+		const track = this.queue.previous();
+		if (!track) return false;
+		if (this.queue.currentTrack) this.insert(this.queue.currentTrack, 0);
+		this.clearLeaveTimeout();
+		return this.startTrack(track);
 	}
 
 	loop(mode?: LoopMode): LoopMode {

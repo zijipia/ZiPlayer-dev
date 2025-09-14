@@ -122,6 +122,19 @@ export class Queue {
 		return this.tracks[0] || null;
 	}
 
+	/**
+	 * Move back to the previously played track.
+	 * Makes the current track the next upcoming track, then sets previous as current.
+	 */
+	previous(): Track | null {
+		if (this.history.length === 0) return null;
+		if (this.current) {
+			this.tracks.unshift(this.current);
+		}
+		this.current = this.history.pop() || null;
+		return this.current;
+	}
+
 	willNextTrack(track?: Track): Track | null {
 		if (track) {
 			this.willnext = track;

@@ -31,7 +31,7 @@ export class PlayerManager extends EventEmitter {
 	private plugins: SourcePlugin[];
 	private extensions: any[];
 	private B_debug: boolean = false;
-	private extractorTimeout: number;
+	private extractorTimeout: number = 10000;
 
 	private debug(message?: any, ...optionalParams: any[]): void {
 		if (this.listenerCount("debug") > 0) {
