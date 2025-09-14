@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import { Player } from "./Player";
-import { PlayerManagerOptions, PlayerOptions, Track, SourcePlugin } from "../types";
+import { PlayerManagerOptions, PlayerOptions, Track, SourcePlugin, SearchResult } from "../types";
 
 const GLOBAL_MANAGER_KEY: symbol = Symbol.for("ziplayer.PlayerManager.instance");
 export const getGlobalManager = (): PlayerManager | null => {
@@ -31,6 +31,7 @@ export class PlayerManager extends EventEmitter {
 	private plugins: SourcePlugin[];
 	private extensions: any[];
 	private B_debug: boolean = false;
+	private extractorTimeout: number;
 
 	private debug(message?: any, ...optionalParams: any[]): void {
 		if (this.listenerCount("debug") > 0) {
@@ -60,6 +61,11 @@ export class PlayerManager extends EventEmitter {
 		this.extensions = options.extensions || [];
 
 		setGlobalManager(this);
+	}
+
+	private withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+		const timeout = this.extractorTimeout;
+		return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), timeout))]);
 	}
 
 	private resolveGuildId(guildOrId: string | { id: string }): string {
@@ -183,6 +189,25 @@ export class PlayerManager extends EventEmitter {
 		}
 		this.players.clear();
 		this.removeAllListeners();
+	}
+
+	/**
+	 * Search using registered plugins without creating a Player.
+	 */
+	async search(query: string, requestedBy: string): Promise<SearchResult> {
+		this.debug(`[PlayerManager] Search called with query: ${query}, requestedBy: ${requestedBy}`);
+		const plugin = this.plugins.find((p) => p.canHandle(query));
+		if (!plugin) {
+			this.debug(`[PlayerManager] No plugin found to handle: ${query}`);
+			throw new Error(`No plugin found to handle: ${query}`);
+		}
+
+		try {
+			return await this.withTimeout(plugin.search(query, requestedBy), "Search operation timed out");
+		} catch (error) {
+			this.debug(`[PlayerManager] Search error:`, error);
+			throw error as Error;
+		}
 	}
 }
 

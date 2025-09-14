@@ -45,6 +45,13 @@ export class Player extends EventEmitter {
 	private ttsPlayer: DiscordAudioPlayer | null = null;
 	private ttsQueue: Array<Track> = [];
 	private ttsActive = false;
+	private clearLeaveTimeout(): void {
+		if (this.leaveTimeout) {
+			clearTimeout(this.leaveTimeout);
+			this.leaveTimeout = null;
+			this.debug(`[Player] Cleared leave timeout`);
+		}
+	}
 
 	private withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
 		const timeout = this.options.extractorTimeout ?? 15000;
@@ -117,6 +124,7 @@ export class Player extends EventEmitter {
 				(oldState.status === AudioPlayerStatus.Idle || oldState.status === AudioPlayerStatus.Buffering)
 			) {
 				// Track started
+				this.clearLeaveTimeout();
 				this.isPlaying = true;
 				this.isPaused = false;
 				const track = this.queue.currentTrack;
@@ -206,10 +214,7 @@ export class Player extends EventEmitter {
 			});
 			connection.subscribe(this.audioPlayer);
 
-			if (this.leaveTimeout) {
-				clearTimeout(this.leaveTimeout);
-				this.leaveTimeout = null;
-			}
+			this.clearLeaveTimeout();
 			return this.connection;
 		} catch (error) {
 			this.debug(`[Player] Connection error:`, error);
@@ -248,6 +253,8 @@ export class Player extends EventEmitter {
 	async play(query: string | Track, requestedBy?: string): Promise<boolean> {
 		try {
 			this.debug(`[Player] Play called with query: ${typeof query === "string" ? query : query?.title}`);
+			// If a leave was scheduled due to previous idle, cancel it now
+			this.clearLeaveTimeout();
 			let tracksToAdd: Track[] = [];
 			let isPlaylist = false;
 			if (typeof query === "string") {
@@ -486,6 +493,8 @@ export class Player extends EventEmitter {
 		}
 
 		this.generateWillNext();
+		// A new track is about to play; ensure we don't leave mid-playback
+		this.clearLeaveTimeout();
 
 		try {
 			// Find plugin that can handle this track
