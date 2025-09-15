@@ -72,6 +72,11 @@ export type SourcePluginLike = SourcePlugin | SourcePluginCtor;
 export interface PlayerManagerOptions {
 	plugins?: SourcePluginLike[];
 	extensions?: any[];
+	/**
+	 * Timeout in milliseconds for manager-level operations (e.g. search)
+	 * when running without a Player instance.
+	 */
+	extractorTimeout?: number;
 }
 
 export interface ProgressBarOptions {

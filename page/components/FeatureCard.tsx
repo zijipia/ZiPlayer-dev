@@ -43,4 +43,3 @@ export function FeatureCard({ icon: Icon, title, description, delay = 0, classNa
 		</motion.div>
 	);
 }
-

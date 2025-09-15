@@ -27,17 +27,16 @@ export function CodeBlock({ code, language = "typescript", showLineNumbers = tru
 				<button
 					onClick={handleCopy}
 					className='flex items-center gap-2 px-3 py-2 bg-dark-800/80 hover:bg-dark-700/80 text-white/70 hover:text-white rounded-lg transition-all duration-200 backdrop-blur-sm border border-white/10 hover:border-white/20'>
-					{copied ? (
+					{copied ?
 						<>
 							<Check size={16} />
 							<span className='text-sm'>Copied!</span>
 						</>
-					) : (
-						<>
+					:	<>
 							<Copy size={16} />
 							<span className='text-sm'>Copy</span>
 						</>
-					)}
+					}
 				</button>
 			</div>
 

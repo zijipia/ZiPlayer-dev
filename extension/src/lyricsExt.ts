@@ -2,11 +2,11 @@ import { BaseExtension, Player, PlayerManager, Track } from "ziplayer";
 import axios from "axios";
 
 interface LyricsOptions {
-  provider?: "lrclib" | "lyricsovh";
-  includeSynced?: boolean; // prefer LRC if available
-  autoFetchOnTrackStart?: boolean; // auto-fetch when a new track starts
-  sanitizeTitle?: boolean; // clean noisy suffixes from titles
-  maxLength?: number; // trim extremely long lyrics
+	provider?: "lrclib" | "lyricsovh";
+	includeSynced?: boolean; // prefer LRC if available
+	autoFetchOnTrackStart?: boolean; // auto-fetch when a new track starts
+	sanitizeTitle?: boolean; // clean noisy suffixes from titles
+	maxLength?: number; // trim extremely long lyrics
 }
 
 export interface LyricsResult {
@@ -35,8 +35,8 @@ export class lyricsExt extends BaseExtension {
 	private manager?: PlayerManager;
 
 	private options: LyricsOptions;
-	private schedules: Map<string, { timers: NodeJS.Timeout[]; startAt: number; lines: { timeMs: number; text: string }[] }>
-		= new Map();
+	private schedules: Map<string, { timers: NodeJS.Timeout[]; startAt: number; lines: { timeMs: number; text: string }[] }> =
+		new Map();
 
 	constructor(player: Player | null = null, opts?: Partial<LyricsOptions>) {
 		super();
@@ -85,21 +85,20 @@ export class lyricsExt extends BaseExtension {
 							`fetched provider=${res.provider} synced=${!!res.synced} textLen=${res.text?.length ?? 0} lines=${lineCount}`,
 						);
 
-            // Emit via manager when available; fallback to player
-            if (this.manager && typeof (this.manager as any).emit === "function") {
-              this.manager.emit("lyricsCreate", player, track, res);
-              this.manager.emit("lyricsChange", player, track, res);
-            } else {
-              (player as any)?.emit?.("lyricsCreate", track, res);
-              (player as any)?.emit?.("lyricsChange", track, res);
-            }
+						// Emit via manager when available; fallback to player
+						if (this.manager && typeof (this.manager as any).emit === "function") {
+							this.manager.emit("lyricsCreate", player, track, res);
+							this.manager.emit("lyricsChange", player, track, res);
+						} else {
+							(player as any)?.emit?.("lyricsCreate", track, res);
+							(player as any)?.emit?.("lyricsChange", track, res);
+						}
 
-					// Start per-line schedule if LRC available
-					if (res.synced) {
-						this.debug(`starting line schedule with LRC, ${lineCount} lines`);
-						this.startLineSchedule(player, track, res, res.synced, startedAt);
-					}
-
+						// Start per-line schedule if LRC available
+						if (res.synced) {
+							this.debug(`starting line schedule with LRC, ${lineCount} lines`);
+							this.startLineSchedule(player, track, res, res.synced, startedAt);
+						}
 					} catch (e: any) {
 						this.debug(`lyrics error: ${e?.message || e}`);
 					}
@@ -153,7 +152,7 @@ export class lyricsExt extends BaseExtension {
 			if (primary) {
 				// Trim if needed
 				const cut = (s?: string | null) =>
-					use.maxLength && s && s.length > use.maxLength ? s.slice(0, use.maxLength) : s ?? null;
+					use.maxLength && s && s.length > use.maxLength ? s.slice(0, use.maxLength) : (s ?? null);
 
 				const result: LyricsResult = {
 					provider: "lrclib",
@@ -179,7 +178,7 @@ export class lyricsExt extends BaseExtension {
 			const text = await this.queryLyricsOVH({ artist, title });
 			if (text) {
 				const cut = (s?: string | null) =>
-					use.maxLength && s && s.length > use.maxLength ? s.slice(0, use.maxLength) : s ?? null;
+					use.maxLength && s && s.length > use.maxLength ? s.slice(0, use.maxLength) : (s ?? null);
 				return {
 					provider: "lyricsovh",
 					source: "Lyrics.ovh",
@@ -229,9 +228,7 @@ export class lyricsExt extends BaseExtension {
 				lineIndex: idx,
 				timeMs: curr?.timeMs ?? 0,
 			};
-			this.debug(
-				`emit line idx=${idx} t=${curr?.timeMs} "${this.trunc(curr?.text || "", 80)}"`,
-			);
+			this.debug(`emit line idx=${idx} t=${curr?.timeMs} "${this.trunc(curr?.text || "", 80)}"`);
 			if (this.manager && typeof (this.manager as any).emit === "function") {
 				this.manager.emit("lyricsChange", player, track, payload);
 			} else {
@@ -243,7 +240,8 @@ export class lyricsExt extends BaseExtension {
 		const elapsed = Date.now() - startAt;
 		let currentIdx = -1;
 		for (let i = 0; i < lines.length; i++) {
-			if (lines[i].timeMs <= elapsed) currentIdx = i; else break;
+			if (lines[i].timeMs <= elapsed) currentIdx = i;
+			else break;
 		}
 		if (currentIdx >= 0) {
 			this.debug(`immediate emit at idx=${currentIdx} (elapsed=${elapsed}ms)`);
@@ -262,7 +260,9 @@ export class lyricsExt extends BaseExtension {
 		const sched = this.schedules.get(player.guildId);
 		if (!sched) return;
 		for (const t of sched.timers) {
-			try { clearTimeout(t); } catch {}
+			try {
+				clearTimeout(t);
+			} catch {}
 		}
 		this.debug(`cleared timers=${sched.timers.length}`);
 		this.schedules.delete(player.guildId);
