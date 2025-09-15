@@ -1,6 +1,6 @@
 {
 	"name": "ziplayer",
-	"version": "0.0.6",
+	"version": "0.0.7",
 	"description": "A modular Discord voice player with plugin system",
 	"keywords": [
 		"ZiPlayer",
@@ -10,7 +10,7 @@
 		"voice",
 		"@ziplayer/plugin"
 	],
-	"homepage": "https://github.com/ZiProject/ZiPlayer#readme",
+	"homepage": "https://player.ziji.world",
 	"bugs": {
 		"url": "https://github.com/ZiProject/ZiPlayer/issues"
 	},

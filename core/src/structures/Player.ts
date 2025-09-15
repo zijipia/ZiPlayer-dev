@@ -556,6 +556,7 @@ export class Player extends EventEmitter {
 					const randomchoice = Math.floor(Math.random() * related.length);
 					const nextTrack = this.queue.nextTrack ? this.queue.nextTrack : related[randomchoice];
 					this.queue.willNextTrack(nextTrack);
+					this.queue.relatedTracks(related);
 					this.debug(`[Player] Will next track if autoplay: ${nextTrack?.title} (via ${p.name})`);
 					this.emit("willPlay", nextTrack, related);
 					return; // success
@@ -779,10 +780,10 @@ export class Player extends EventEmitter {
 		const progress = Math.round(ratio * size);
 		const bar = barChar.repeat(progress) + progressChar + barChar.repeat(size - progress);
 
-		return `${this.formatTime(current)} ${bar} ${this.formatTime(total)}`;
+		return `${this.formatTime(current)} | ${bar} | ${this.formatTime(total)}`;
 	}
 
-	private formatTime(ms: number): string {
+	formatTime(ms: number): string {
 		const totalSeconds = Math.floor(ms / 1000);
 		const hours = Math.floor(totalSeconds / 3600);
 		const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -846,6 +847,10 @@ export class Player extends EventEmitter {
 		return this.queue.currentTrack;
 	}
 
+	get previousTrack(): Track | null {
+		return this.queue.previousTracks?.at(-1) ?? null;
+	}
+
 	get upcomingTracks(): Track[] {
 		return this.queue.getTracks();
 	}
@@ -856,5 +861,8 @@ export class Player extends EventEmitter {
 
 	get availablePlugins(): string[] {
 		return this.pluginManager.getAll().map((p) => p.name);
+	}
+	get relatedTracks(): Track[] | null {
+		return this.queue.relatedTracks();
 	}
 }
