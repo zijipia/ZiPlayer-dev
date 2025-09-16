@@ -123,17 +123,17 @@ jobs:
 
       - name: Bootstrap core package
         run: |
-          npm -C core ci || npm -C core i
+          npm -C core ci || npm -C core i --force
           npm -C core run build || true
 
       - name: Bootstrap plugins package
         run: |
-          npm -C plugins ci || npm -C plugins i
+          npm -C plugins ci || npm -C plugins i --force
           npm -C plugins run build || true
 
       - name: Bootstrap extension package
         run: |
-          npm -C extension ci || npm -C extension i
+          npm -C extension ci || npm -C extension i --force
           npm -C extension run build || true
 
       - name: Run tests
