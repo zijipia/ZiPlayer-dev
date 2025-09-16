@@ -147,7 +147,6 @@ export class YouTubePlugin extends BasePlugin {
 					if (anchorVideoId) {
 						try {
 							const info: any = await (this.searchClient as any).getInfo(anchorVideoId);
-							console.log(info);
 							const feed: any[] = info?.watch_next_feed || [];
 							const tracks: Track[] = feed
 								.filter((tr: any) => tr?.content_type === "VIDEO")
@@ -226,7 +225,6 @@ export class YouTubePlugin extends BasePlugin {
 
 			const playlist: any = await (this.client as any).getPlaylist(listId);
 			const videos: any[] = playlist?.videos || playlist?.items || [];
-			console.log(playlist);
 			return videos.map((v: any) => {
 				return this.buildTrack(v, requestedBy, { playlist: listId }); //ack;
 			});
