@@ -448,15 +448,8 @@ export class Player extends EventEmitter {
 			// Derive timeout from resource/track duration when available, with a sensible cap
 			const md: any = (resource as any)?.metadata ?? {};
 			const declared =
-				typeof md.duration === "number" ? md.duration
-				: typeof next?.duration === "number" ? next.duration
-				: undefined;
-			const declaredMs =
-				declared ?
-					declared > 1000 ?
-						declared
-					:	declared * 1000
-				:	undefined;
+				typeof md.duration === "number" ? md.duration : typeof next?.duration === "number" ? next.duration : undefined;
+			const declaredMs = declared ? (declared > 1000 ? declared : declared * 1000) : undefined;
 			const cap = this.options?.tts?.Max_Time_TTS ?? 60_000;
 			const idleTimeout = declaredMs ? Math.min(cap, Math.max(1_000, declaredMs + 1_500)) : cap;
 			await entersState(ttsPlayer, AudioPlayerStatus.Idle, idleTimeout).catch(() => null);
@@ -780,6 +773,25 @@ export class Player extends EventEmitter {
 		const bar = barChar.repeat(progress) + progressChar + barChar.repeat(size - progress);
 
 		return `${this.formatTime(current)} | ${bar} | ${this.formatTime(total)}`;
+	}
+
+	getTime() {
+		const resource = this.currentResource;
+		const track = this.queue.currentTrack;
+		if (!track || !resource)
+			return {
+				current: 0,
+				total: 0,
+				format: "00:00",
+			};
+
+		const total = track.duration > 1000 ? track.duration : track.duration * 1000;
+
+		return {
+			current: resource?.playbackDuration,
+			total: total,
+			format: this.formatTime(resource.playbackDuration),
+		};
 	}
 
 	formatTime(ms: number): string {
