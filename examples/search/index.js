@@ -7,6 +7,6 @@ const { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin, TTSPlugin } = require("@
 		plugins: [new TTSPlugin({ defaultLang: "vi" }), new YouTubePlugin(), new SoundCloudPlugin(), new SpotifyPlugin()],
 	});
 	//another file
-const plr = PlayerManager.default();
-console.log(await plr.search("Ziji nightcore"));
+	const plr = PlayerManager.default();
+	console.log(await plr.search("Ziji nightcore"));
 })();
