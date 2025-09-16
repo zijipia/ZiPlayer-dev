@@ -62,10 +62,9 @@ export class voiceExt extends BaseExtension {
 
 	private client?: any;
 	private speechOptions: SpeechOptions;
-	// Guards to avoid duplicate listener attachment and per-user re-subscribes
 	private _speakingEmitter?: any;
 	private _speakingAttached = false;
-	private _activeSpeakers = new Set<string>();
+	// private _activeSpeakers = new Set<string>();
 
 	constructor(player: Player | null = null, opts?: Partial<SpeechOptions> & { client?: any }) {
 		super();
@@ -133,7 +132,7 @@ export class voiceExt extends BaseExtension {
 				conn?.receiver?.speaking?.removeAllListeners?.();
 				this._speakingAttached = false;
 				this._speakingEmitter = undefined;
-				this._activeSpeakers.clear();
+				// this._activeSpeakers.clear();
 			} catch {}
 		});
 	}
@@ -184,10 +183,10 @@ export class voiceExt extends BaseExtension {
 			}
 
 			// Avoid duplicate subscribe calls for the same active speaker (prevents listener buildup)
-			if (this._activeSpeakers.has(userId)) {
-				this.debug(`Already subscribed to ${userId}, skipping duplicate`);
-				return;
-			}
+			// if (this._activeSpeakers.has(userId)) {
+			// 	this.debug(`Already subscribed to ${userId}, skipping duplicate`);
+			// 	return;
+			// }
 
 			// Prepare a per-session options override via onVoiceChange (non-blocking)
 			const channelId = String(connection?.joinConfig?.channelId ?? "");
@@ -207,7 +206,7 @@ export class voiceExt extends BaseExtension {
 				return undefined;
 			});
 
-			this._activeSpeakers.add(userId);
+			// this._activeSpeakers.add(userId);
 			const opusStream = connection.receiver.subscribe(userId, {
 				end: {
 					// EndBehaviorType.AfterSilence === 1
@@ -240,7 +239,6 @@ export class voiceExt extends BaseExtension {
 				.pipe(new PcmStream())
 				.on("data", (d: Buffer) => chunks.push(d))
 				.on("end", async () => {
-					this._activeSpeakers.delete(userId);
 					const overrides = (await pendingOverrides) || {};
 					const effective = { ...this.speechOptions, ...overrides } as SpeechOptions;
 					const delay = effective.postSilenceDelayMs ?? 2000;
@@ -254,7 +252,7 @@ export class voiceExt extends BaseExtension {
 		const opts = effective ?? this.speechOptions;
 		const pcm = Buffer.concat(bufferData);
 		const durationSec = pcm.length / 48000 / 4; // 48kHz, 2ch, 16-bit
-
+		// this._activeSpeakers.delete(userId);
 		if (durationSec < opts.minimalVoiceMessageDuration) {
 			this.debug(`Voice too short (${durationSec.toFixed(2)}s)`);
 			return;
