@@ -576,7 +576,6 @@ export class Player extends EventEmitter {
 		if (!track) {
 			if (this.queue.autoPlay()) {
 				const willnext = this.queue.willNextTrack();
-				console.log("willnext", willnext);
 				if (willnext) {
 					this.debug(`[Player] Auto-playing next track: ${willnext.title}`);
 					this.queue.addMultiple([willnext]);

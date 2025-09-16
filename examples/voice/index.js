@@ -187,3 +187,6 @@ process.on("unhandledRejection", function (err) {
 	console.log("Handled exception: " + err);
 	console.log(err.stack);
 });
+
+const searchh = Manager.default();
+searchh.search("em của quá khứ");

@@ -7,7 +7,6 @@ export const getGlobalManager = (): PlayerManager | null => {
 	try {
 		const instance = (globalThis as any)[GLOBAL_MANAGER_KEY];
 		if (!instance) {
-			console.debug("[PlayerManager] No global instance found");
 			return null;
 		}
 		return instance as PlayerManager;
@@ -19,7 +18,6 @@ export const getGlobalManager = (): PlayerManager | null => {
 const setGlobalManager = (instance: PlayerManager): void => {
 	try {
 		(globalThis as any)[GLOBAL_MANAGER_KEY] = instance;
-		console.debug("[PlayerManager] Global instance set successfully");
 	} catch (error) {
 		console.error("[PlayerManager] Error setting global instance:", error);
 	}
@@ -28,6 +26,13 @@ const setGlobalManager = (instance: PlayerManager): void => {
 export class PlayerManager extends EventEmitter {
 	private static instance: PlayerManager | null = null;
 	private players: Map<string, Player> = new Map();
+	static default(opt?: PlayerOptions): Player {
+		let globaldef = getGlobalManager();
+		if (!globaldef) {
+			globaldef = new PlayerManager({});
+		}
+		return globaldef.create("default", opt);
+	}
 	private plugins: SourcePlugin[];
 	private extensions: any[];
 	private B_debug: boolean = false;
@@ -158,6 +163,10 @@ export class PlayerManager extends EventEmitter {
 		return this.players.get(guildId);
 	}
 
+	getall(): Player[] | [] {
+		return Array.from(this.players.values());
+	}
+
 	delete(guildOrId: string | { id: string }): boolean {
 		const guildId = this.resolveGuildId(guildOrId);
 		const player = this.players.get(guildId);
@@ -214,7 +223,7 @@ export class PlayerManager extends EventEmitter {
 export function getInstance(): PlayerManager | null {
 	const globalInst = getGlobalManager();
 	if (!globalInst) {
-		console.debug("[PlayerManager] Global instance not found, make sure to initialize with new PlayerManager(options)");
+		console.error("[PlayerManager] Global instance not found, make sure to initialize with new PlayerManager(options)");
 		return null;
 	}
 	return globalInst;
