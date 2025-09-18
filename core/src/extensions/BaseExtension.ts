@@ -1,5 +1,13 @@
-import { SourceExtension, Track, SearchResult, StreamInfo } from "../types";
-import { Player } from "../structures/Player";
+import type {
+	SourceExtension,
+	ExtensionContext,
+	ExtensionPlayRequest,
+	ExtensionPlayResponse,
+	ExtensionAfterPlayPayload,
+	ExtensionStreamRequest,
+	StreamInfo,
+} from "../types";
+import type { Player } from "../structures/Player";
 
 export abstract class BaseExtension implements SourceExtension {
 	abstract name: string;
@@ -7,4 +15,16 @@ export abstract class BaseExtension implements SourceExtension {
 	abstract player: Player | null;
 
 	abstract active(alas: any): boolean;
+
+	onRegister?(context: ExtensionContext): void | Promise<void>;
+	onDestroy?(context: ExtensionContext): void | Promise<void>;
+	beforePlay?(
+		context: ExtensionContext,
+		payload: ExtensionPlayRequest,
+	): Promise<ExtensionPlayResponse | void> | ExtensionPlayResponse | void;
+	afterPlay?(context: ExtensionContext, payload: ExtensionAfterPlayPayload): Promise<void> | void;
+	provideStream?(
+		context: ExtensionContext,
+		payload: ExtensionStreamRequest,
+	): Promise<StreamInfo | null | undefined> | StreamInfo | null | undefined;
 }

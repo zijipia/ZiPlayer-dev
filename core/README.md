@@ -120,6 +120,45 @@ Notes
 - For CPU-heavy TTS generation, consider offloading to `worker_threads` or a separate process and pass a stream/buffer to the
   plugin.
 
+### Player Lifecycle Overview
+
+```
+PlayerManager.create(guild, opts)
+        │
+        ▼
+[Player constructor]
+ - setup event listeners
+ - freeze ExtensionContext { player, manager }
+ - register plugins
+        │
+        ▼
+attachExtension(ext)
+ - set ext.player
+ - ext.onRegister?(context)
+ - ext.active?(...) → false ⇒ detach
+        │
+        ▼
+player.play(query, by)
+ - runBeforePlayHooks → extensions may mutate query/tracks/start Lavalink
+ - resolve track list / queue updates / TTS interrupt check
+ - extensionsProvideStream → extension stream overrides plugin pipeline
+ - plugin.getStream / getFallback
+        │
+        ▼
+Audio playback
+ - trackStart / queue events emitted
+ - runAfterPlayHooks with final outcome
+        │
+        ▼
+player.destroy()
+ - stop audio/voice / clear queue & plugins
+ - ext.onDestroy?(context) for each attached extension
+ - emit playerDestroy & cleanup references
+```
+
+This diagram shows how custom extensions (voice, lyrics, Lavalink, etc.) integrate across the full player lifecycle and where
+their hooks are invoked.
+
 ## Creating Custom Plugins
 
 ```typescript
