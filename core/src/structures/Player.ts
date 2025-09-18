@@ -17,7 +17,7 @@ import { VoiceChannel } from "discord.js";
 import { Readable } from "stream";
 import { BaseExtension } from "../extensions";
 import { Track, PlayerOptions, PlayerEvents, SourcePlugin, SearchResult, ProgressBarOptions, LoopMode, StreamInfo } from "../types";
-import type { ExtensionContext, ExtensionPlayRequest, ExtensionPlayResponse, ExtensionAfterPlayPayload, ExtensionStreamRequest } from "../types";
+import type { ExtensionContext, ExtensionPlayRequest, ExtensionPlayResponse, ExtensionAfterPlayPayload, ExtensionStreamRequest, ExtensionSearchRequest } from "../types";
 import { Queue } from "./Queue";
 import { PluginManager } from "../plugins";
 import type { PlayerManager } from "./PlayerManager";
@@ -134,6 +134,24 @@ export class Player extends EventEmitter {
 				this.debug(`[Player] Extension ${extension.name} afterPlay error:`, err);
 			}
 		}
+	}
+
+	private async extensionsProvideSearch(query: string, requestedBy: string): Promise<SearchResult | null> {
+		const request: ExtensionSearchRequest = { query, requestedBy };
+		for (const extension of this.extensions) {
+			const hook = (extension as any).provideSearch;
+			if (typeof hook !== "function") continue;
+			try {
+				const result = await Promise.resolve(hook.call(extension, this.extensionContext, request));
+				if (result && Array.isArray(result.tracks) && result.tracks.length > 0) {
+					this.debug(`[Player] Extension ${extension.name} handled search for query: ${query}`);
+					return result as SearchResult;
+				}
+			} catch (err) {
+				this.debug(`[Player] Extension ${extension.name} provideSearch error:`, err);
+			}
+		}
+		return null;
 	}
 
 	private async extensionsProvideStream(track: Track): Promise<StreamInfo | null> {
@@ -432,6 +450,11 @@ export class Player extends EventEmitter {
 
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		this.debug(`[Player] Search called with query: ${query}, requestedBy: ${requestedBy}`);
+		const extensionResult = await this.extensionsProvideSearch(query, requestedBy);
+		if (extensionResult && Array.isArray(extensionResult.tracks) && extensionResult.tracks.length > 0) {
+			this.debug(`[Player] Extension handled search for query: ${query}`);
+			return extensionResult;
+		}
 		const plugins = this.pluginManager.getAll();
 		let lastError: any = null;
 

@@ -121,6 +121,11 @@ export interface ExtensionStreamRequest {
 	track: Track;
 }
 
+export interface ExtensionSearchRequest {
+	query: string;
+	requestedBy: string;
+}
+
 export interface PlayerEvents {
 	debug: [message: string, ...args: any[]];
 	willPlay: [track: Track, upcomingTracks: Track[]];
@@ -166,5 +171,6 @@ export interface SourceExtension {
 	onDestroy?(context: ExtensionContext): void | Promise<void>;
 	beforePlay?(context: ExtensionContext, payload: ExtensionPlayRequest): Promise<ExtensionPlayResponse | void> | ExtensionPlayResponse | void;
 	afterPlay?(context: ExtensionContext, payload: ExtensionAfterPlayPayload): Promise<void> | void;
+	provideSearch?(context: ExtensionContext, payload: ExtensionSearchRequest): Promise<SearchResult | null | undefined> | SearchResult | null | undefined;
 	provideStream?(context: ExtensionContext, payload: ExtensionStreamRequest): Promise<StreamInfo | null | undefined> | StreamInfo | null | undefined;
 }
