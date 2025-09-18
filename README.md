@@ -120,6 +120,45 @@ Notes
 - For CPU-heavy TTS generation, consider offloading to `worker_threads` or a separate process and pass a stream/buffer to the
   plugin.
 
+### Player Lifecycle Overview
+
+```
+PlayerManager.create(guild, opts)
+        │
+        ▼
+[Player constructor]
+ - setup event listeners
+ - freeze ExtensionContext { player, manager }
+ - register plugins
+        │
+        ▼
+attachExtension(ext)
+ - set ext.player
+ - ext.onRegister?(context)
+ - ext.active?(...) → false ⇒ detach
+        │
+        ▼
+player.play(query, by)
+ - runBeforePlayHooks → extensions may mutate query/tracks/start Lavalink
+ - resolve track list / queue updates / TTS interrupt check
+ - extensionsProvideStream → extension stream overrides plugin pipeline
+ - plugin.getStream / getFallback
+        │
+        ▼
+Audio playback
+ - trackStart / queue events emitted
+ - runAfterPlayHooks with final outcome
+        │
+        ▼
+player.destroy()
+ - stop audio/voice / clear queue & plugins
+ - ext.onDestroy?(context) for each attached extension
+ - emit playerDestroy & cleanup references
+```
+
+This diagram shows how custom extensions (voice, lyrics, Lavalink, etc.) integrate across the full player lifecycle and where
+their hooks are invoked.
+
 ## Creating Custom Plugins
 
 ```typescript
@@ -175,25 +214,6 @@ All player events are forwarded through the PlayerManager:
 [Example](https://github.com/ZiProject/ZiPlayer/tree/main/examples) | [Repo](https://github.com/ZiProject/ZiPlayer) |
 [Package](https://www.npmjs.com/package/ziplayer) | [Plugin](https://www.npmjs.com/package/@ziplayer/plugin) |
 [Extension](https://www.npmjs.com/package/@ziplayer/extension)
-
-## Testing
-
-This repository includes a lightweight unit test suite using Node's built-in test runner (no external dependencies).
-
-- Requirements: Node.js 18+
-- Run tests from the repository root:
-
-```
-npm test
-```
-
-Notes
-<img width="1000" height="1000" alt="Untitled-1" src="https://github.com/user-attachments/assets/4e7855e8-6044-4c49-90bd-867436173b4f" />
-
-- Tests focus on core data structures (Queue, PluginManager, Player/Manager basics) and plugin logic that does not require network
-  calls.
-- Network-heavy behaviors (e.g., resolving or streaming from YouTube/SoundCloud/Spotify) are intentionally not exercised to keep
-  tests deterministic and fast.
 
 ## License
 
