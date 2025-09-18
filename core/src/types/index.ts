@@ -1,6 +1,7 @@
 import { VoiceConnection } from "@discordjs/voice";
 import { Readable } from "stream";
 import { Player } from "../structures/Player";
+import type { PlayerManager } from "../structures/PlayerManager";
 
 export interface Track {
 	id: string;
@@ -87,6 +88,44 @@ export interface ProgressBarOptions {
 
 export type LoopMode = "off" | "track" | "queue";
 
+export interface ExtensionContext {
+	player: Player;
+	manager: PlayerManager;
+}
+
+export interface ExtensionPlayRequest {
+	query: string | Track;
+	requestedBy?: string;
+}
+
+export interface ExtensionPlayResponse {
+	handled?: boolean;
+	query?: string | Track;
+	requestedBy?: string;
+	tracks?: Track[];
+	isPlaylist?: boolean;
+	success?: boolean;
+	error?: Error;
+}
+
+export interface ExtensionAfterPlayPayload {
+	success: boolean;
+	query: string | Track;
+	requestedBy?: string;
+	tracks?: Track[];
+	isPlaylist?: boolean;
+	error?: Error;
+}
+
+export interface ExtensionStreamRequest {
+	track: Track;
+}
+
+export interface ExtensionSearchRequest {
+	query: string;
+	requestedBy: string;
+}
+
 export interface PlayerEvents {
 	debug: [message: string, ...args: any[]];
 	willPlay: [track: Track, upcomingTracks: Track[]];
@@ -128,4 +167,10 @@ export interface SourceExtension {
 	connection?: VoiceConnection;
 	player: Player | null;
 	active(alas: any): boolean;
+	onRegister?(context: ExtensionContext): void | Promise<void>;
+	onDestroy?(context: ExtensionContext): void | Promise<void>;
+	beforePlay?(context: ExtensionContext, payload: ExtensionPlayRequest): Promise<ExtensionPlayResponse | void> | ExtensionPlayResponse | void;
+	afterPlay?(context: ExtensionContext, payload: ExtensionAfterPlayPayload): Promise<void> | void;
+	provideSearch?(context: ExtensionContext, payload: ExtensionSearchRequest): Promise<SearchResult | null | undefined> | SearchResult | null | undefined;
+	provideStream?(context: ExtensionContext, payload: ExtensionStreamRequest): Promise<StreamInfo | null | undefined> | StreamInfo | null | undefined;
 }

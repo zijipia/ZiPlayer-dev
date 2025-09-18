@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import { Player } from "./Player";
 import { PlayerManagerOptions, PlayerOptions, Track, SourcePlugin, SearchResult } from "../types";
+import type { BaseExtension } from "../extensions";
 
 const GLOBAL_MANAGER_KEY: symbol = Symbol.for("ziplayer.PlayerManager.instance");
 export const getGlobalManager = (): PlayerManager | null => {
@@ -116,13 +117,21 @@ export class PlayerManager extends EventEmitter {
 				}
 			}
 			if (instance && typeof instance === "object") {
-				if ("player" in instance && !instance.player) instance.player = player;
-				if (typeof instance.active === "function") {
+				const extInstance = instance as BaseExtension;
+				if ("player" in extInstance && !extInstance.player) extInstance.player = player;
+				player.attachExtension(extInstance);
+				if (typeof extInstance.active === "function") {
+					let activated: boolean | void = true;
 					try {
-						instance.active({ manager: this, player });
-						this.debug(`[PlayerManager] Extension ${instance?.name} active`);
+						activated = extInstance.active({ manager: this, player });
+						this.debug(`[PlayerManager] Extension ${extInstance?.name} active`);
 					} catch (e) {
+						activated = false;
 						this.debug(`[PlayerManager] Extension activation error:`, e);
+					}
+					if (activated === false) {
+						player.detachExtension(extInstance);
+						continue;
 					}
 				}
 			}

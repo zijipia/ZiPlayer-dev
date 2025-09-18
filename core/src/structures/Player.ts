@@ -15,7 +15,9 @@ import {
 
 import { VoiceChannel } from "discord.js";
 import { Readable } from "stream";
-import { Track, PlayerOptions, PlayerEvents, SourcePlugin, SearchResult, ProgressBarOptions, LoopMode } from "../types";
+import { BaseExtension } from "../extensions";
+import { Track, PlayerOptions, PlayerEvents, SourcePlugin, SearchResult, ProgressBarOptions, LoopMode, StreamInfo } from "../types";
+import type { ExtensionContext, ExtensionPlayRequest, ExtensionPlayResponse, ExtensionAfterPlayPayload, ExtensionStreamRequest, ExtensionSearchRequest } from "../types";
 import { Queue } from "./Queue";
 import { PluginManager } from "../plugins";
 import type { PlayerManager } from "./PlayerManager";
@@ -40,64 +42,202 @@ export class Player extends EventEmitter {
 	private currentResource: AudioResource | null = null;
 	private volumeInterval: NodeJS.Timeout | null = null;
 	private skipLoop = false;
+	private extensions: BaseExtension[] = [];
+	private extensionContext!: ExtensionContext;
+	public attachExtension(extension: BaseExtension): void {
+		if (this.extensions.includes(extension)) return;
+		if (!extension.player) extension.player = this;
+		this.extensions.push(extension);
+		this.invokeExtensionLifecycle(extension, "onRegister");
+	}
+
+	public detachExtension(extension: BaseExtension): void {
+		const index = this.extensions.indexOf(extension);
+		if (index === -1) return;
+		this.extensions.splice(index, 1);
+		this.invokeExtensionLifecycle(extension, "onDestroy");
+		if (extension.player === this) {
+			extension.player = null;
+		}
+	}
+
+	public getExtensions(): readonly BaseExtension[] {
+		return this.extensions;
+	}
+
+	private invokeExtensionLifecycle(extension: BaseExtension, hook: "onRegister" | "onDestroy"): void {
+		const fn = (extension as any)[hook];
+		if (typeof fn !== "function") return;
+		try {
+			const result = fn.call(extension, this.extensionContext);
+			if (result && typeof (result as Promise<unknown>).then === "function") {
+				(result as Promise<unknown>).catch((err) => this.debug(`[Player] Extension ${extension.name} ${hook} error:`, err));
+			}
+		} catch (err) {
+			this.debug(`[Player] Extension ${extension.name} ${hook} error:`, err);
+		}
+	}
+
+	private async runBeforePlayHooks(initial: ExtensionPlayRequest): Promise<{ request: ExtensionPlayRequest; response: ExtensionPlayResponse }> {
+		const request: ExtensionPlayRequest = { ...initial };
+		const response: ExtensionPlayResponse = {};
+		for (const extension of this.extensions) {
+			const hook = (extension as any).beforePlay;
+			if (typeof hook !== "function") continue;
+			try {
+				const result = await Promise.resolve(hook.call(extension, this.extensionContext, request));
+				if (!result) continue;
+				if (result.query !== undefined) {
+					request.query = result.query;
+					response.query = result.query;
+				}
+				if (result.requestedBy !== undefined) {
+					request.requestedBy = result.requestedBy;
+					response.requestedBy = result.requestedBy;
+				}
+				if (Array.isArray(result.tracks)) {
+					response.tracks = result.tracks;
+				}
+				if (typeof result.isPlaylist === "boolean") {
+					response.isPlaylist = result.isPlaylist;
+				}
+				if (typeof result.success === "boolean") {
+					response.success = result.success;
+				}
+				if (result.error instanceof Error) {
+					response.error = result.error;
+				}
+				if (typeof result.handled === "boolean") {
+					response.handled = result.handled;
+					if (result.handled) break;
+				}
+			} catch (err) {
+				this.debug(`[Player] Extension ${extension.name} beforePlay error:`, err);
+			}
+		}
+		return { request, response };
+	}
+
+	private async runAfterPlayHooks(payload: ExtensionAfterPlayPayload): Promise<void> {
+		if (this.extensions.length === 0) return;
+		const safeTracks = payload.tracks ? [...payload.tracks] : undefined;
+		if (safeTracks) {
+			Object.freeze(safeTracks);
+		}
+		const immutablePayload = Object.freeze({ ...payload, tracks: safeTracks });
+		for (const extension of this.extensions) {
+			const hook = (extension as any).afterPlay;
+			if (typeof hook !== "function") continue;
+			try {
+				await Promise.resolve(hook.call(extension, this.extensionContext, immutablePayload));
+			} catch (err) {
+				this.debug(`[Player] Extension ${extension.name} afterPlay error:`, err);
+			}
+		}
+	}
+
+	private async extensionsProvideSearch(query: string, requestedBy: string): Promise<SearchResult | null> {
+		const request: ExtensionSearchRequest = { query, requestedBy };
+		for (const extension of this.extensions) {
+			const hook = (extension as any).provideSearch;
+			if (typeof hook !== "function") continue;
+			try {
+				const result = await Promise.resolve(hook.call(extension, this.extensionContext, request));
+				if (result && Array.isArray(result.tracks) && result.tracks.length > 0) {
+					this.debug(`[Player] Extension ${extension.name} handled search for query: ${query}`);
+					return result as SearchResult;
+				}
+			} catch (err) {
+				this.debug(`[Player] Extension ${extension.name} provideSearch error:`, err);
+			}
+		}
+		return null;
+	}
+
+	private async extensionsProvideStream(track: Track): Promise<StreamInfo | null> {
+		const request: ExtensionStreamRequest = { track };
+		for (const extension of this.extensions) {
+			const hook = (extension as any).provideStream;
+			if (typeof hook !== "function") continue;
+			try {
+				const result = await Promise.resolve(hook.call(extension, this.extensionContext, request));
+				if (result && (result as StreamInfo).stream) {
+					this.debug(`[Player] Extension ${extension.name} provided stream for track: ${track.title}`);
+					return result as StreamInfo;
+				}
+			} catch (err) {
+				this.debug(`[Player] Extension ${extension.name} provideStream error:`, err);
+			}
+		}
+		return null;
+	}
 
 	/**
 	 * Start playing a specific track immediately, replacing the current resource.
 	 */
 	private async startTrack(track: Track): Promise<boolean> {
 		try {
-			// Find plugin that can handle this track
-			const plugin = this.pluginManager.findPlugin(track.url) || this.pluginManager.get(track.source);
+			let streamInfo: StreamInfo | null = await this.extensionsProvideStream(track);
+			let plugin: SourcePlugin | undefined;
 
-			if (!plugin) {
-				this.debug(`[Player] No plugin found for track: ${track.title}`);
-				throw new Error(`No plugin found for track: ${track.title}`);
+			if (!streamInfo) {
+				plugin = this.pluginManager.findPlugin(track.url) || this.pluginManager.get(track.source);
+
+				if (!plugin) {
+					this.debug(`[Player] No plugin found for track: ${track.title}`);
+					throw new Error(`No plugin found for track: ${track.title}`);
+				}
+
+				this.debug(`[Player] Getting stream for track: ${track.title}`);
+				this.debug(`[Player] Using plugin: ${plugin.name}`);
+				this.debug(`[Track] Track Info:`, track);
+				try {
+					streamInfo = await this.withTimeout(plugin.getStream(track), "getStream timed out");
+				} catch (streamError) {
+					this.debug(`[Player] getStream failed, trying getFallback:`, streamError);
+					const allplugs = this.pluginManager.getAll();
+					for (const p of allplugs) {
+						if (typeof (p as any).getFallback !== "function") {
+							continue;
+						}
+						try {
+							streamInfo = await this.withTimeout((p as any).getFallback(track), `getFallback timed out for plugin ${p.name}`);
+							if (!(streamInfo as any)?.stream) continue;
+							this.debug(`[Player] getFallback succeeded with plugin ${p.name} for track: ${track.title}`);
+							break;
+						} catch (fallbackError) {
+							this.debug(`[Player] getFallback failed with plugin ${p.name}:`, fallbackError);
+						}
+					}
+					if (!(streamInfo as any)?.stream) {
+						throw new Error(`All getFallback attempts failed for track: ${track.title}`);
+					}
+				}
+			} else {
+				this.debug(`[Player] Using extension-provided stream for track: ${track.title}`);
 			}
 
-			this.debug(`[Player] Getting stream for track: ${track.title}`);
-			this.debug(`[Player] Using plugin: ${plugin.name}`);
-			this.debug(`[Track] Track Info:`, track);
-			let streamInfo;
-			try {
-				streamInfo = await this.withTimeout(plugin.getStream(track), "getStream timed out");
-			} catch (streamError) {
-				this.debug(`[Player] getStream failed, trying getFallback:`, streamError);
-				const allplugs = this.pluginManager.getAll();
-				for (const p of allplugs) {
-					if (typeof (p as any).getFallback !== "function") {
-						continue;
-					}
-					try {
-						streamInfo = await this.withTimeout((p as any).getFallback(track), `getFallback timed out for plugin ${p.name}`);
-						if (!(streamInfo as any).stream) continue;
-						this.debug(`[Player] getFallback succeeded with plugin ${p.name} for track: ${track.title}`);
-						break;
-					} catch (fallbackError) {
-						this.debug(`[Player] getFallback failed with plugin ${p.name}:`, fallbackError);
-					}
-				}
-
-				if (!(streamInfo as any)?.stream) {
-					throw new Error(`All getFallback attempts failed for track: ${track.title}`);
-				}
+			if (plugin) {
 				this.debug(streamInfo);
 			}
+			if (!streamInfo || !(streamInfo as any).stream) {
+				throw new Error(`No stream available for track: ${track.title}`);
+			}
 
-			function mapToStreamType(type: string): StreamType {
+			function mapToStreamType(type: string | undefined): StreamType {
 				switch (type) {
 					case "webm/opus":
 						return StreamType.WebmOpus;
 					case "ogg/opus":
 						return StreamType.OggOpus;
 					case "arbitrary":
-						return StreamType.Arbitrary;
 					default:
 						return StreamType.Arbitrary;
 				}
 			}
 
-			let stream: Readable = (streamInfo as any).stream;
-			let inputType = mapToStreamType((streamInfo as any).type);
+			const stream: Readable = (streamInfo as StreamInfo).stream;
+			const inputType = mapToStreamType((streamInfo as StreamInfo).type);
 
 			this.currentResource = createAudioResource(stream, {
 				metadata: track,
@@ -184,6 +324,7 @@ export class Player extends EventEmitter {
 		this.volume = this.options.volume || 100;
 		this.userdata = this.options.userdata;
 		this.setupEventListeners();
+		this.extensionContext = Object.freeze({ player: this, manager });
 
 		// Optionally pre-create the TTS AudioPlayer
 		if (this.options?.tts?.createPlayer) {
@@ -309,6 +450,11 @@ export class Player extends EventEmitter {
 
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		this.debug(`[Player] Search called with query: ${query}, requestedBy: ${requestedBy}`);
+		const extensionResult = await this.extensionsProvideSearch(query, requestedBy);
+		if (extensionResult && Array.isArray(extensionResult.tracks) && extensionResult.tracks.length > 0) {
+			this.debug(`[Player] Extension handled search for query: ${query}`);
+			return extensionResult;
+		}
 		const plugins = this.pluginManager.getAll();
 		let lastError: any = null;
 
@@ -334,22 +480,51 @@ export class Player extends EventEmitter {
 	}
 
 	async play(query: string | Track, requestedBy?: string): Promise<boolean> {
-		try {
-			this.debug(`[Player] Play called with query: ${typeof query === "string" ? query : query?.title}`);
-			// If a leave was scheduled due to previous idle, cancel it now
-			this.clearLeaveTimeout();
-			let tracksToAdd: Track[] = [];
-			let isPlaylist = false;
-			if (typeof query === "string") {
-				const searchResult = await this.search(query, requestedBy || "Unknown");
-				tracksToAdd = searchResult.tracks;
+		this.debug(`[Player] Play called with query: ${typeof query === "string" ? query : query?.title}`);
+		this.clearLeaveTimeout();
+		let tracksToAdd: Track[] = [];
+		let isPlaylist = false;
+		let effectiveRequest: ExtensionPlayRequest = { query, requestedBy };
+		let hookResponse: ExtensionPlayResponse = {};
 
+		try {
+			const hookOutcome = await this.runBeforePlayHooks(effectiveRequest);
+			effectiveRequest = hookOutcome.request;
+			hookResponse = hookOutcome.response;
+			if (effectiveRequest.requestedBy === undefined) {
+				effectiveRequest.requestedBy = requestedBy;
+			}
+
+			const hookTracks = Array.isArray(hookResponse.tracks) ? hookResponse.tracks : undefined;
+
+			if (hookResponse.handled && (!hookTracks || hookTracks.length === 0)) {
+				const handledPayload: ExtensionAfterPlayPayload = {
+					success: hookResponse.success ?? true,
+					query: effectiveRequest.query,
+					requestedBy: effectiveRequest.requestedBy,
+					tracks: [],
+					isPlaylist: hookResponse.isPlaylist ?? false,
+					error: hookResponse.error,
+				};
+				await this.runAfterPlayHooks(handledPayload);
+				if (hookResponse.error) {
+					this.emit("playerError", hookResponse.error);
+				}
+				return hookResponse.success ?? true;
+			}
+
+			if (hookTracks && hookTracks.length > 0) {
+				tracksToAdd = hookTracks;
+				isPlaylist = hookResponse.isPlaylist ?? hookTracks.length > 1;
+			} else if (typeof effectiveRequest.query === "string") {
+				const searchResult = await this.search(effectiveRequest.query, effectiveRequest.requestedBy || "Unknown");
+				tracksToAdd = searchResult.tracks;
 				if (searchResult.playlist) {
 					isPlaylist = true;
 					this.debug(`[Player] Added playlist: ${searchResult.playlist.name} (${tracksToAdd.length} tracks)`);
 				}
-			} else {
-				tracksToAdd = [query];
+			} else if (effectiveRequest.query) {
+				tracksToAdd = [effectiveRequest.query as Track];
 			}
 
 			if (tracksToAdd.length === 0) {
@@ -357,7 +532,6 @@ export class Player extends EventEmitter {
 				throw new Error("No tracks found");
 			}
 
-			// If a TTS track is requested and interrupt mode is enabled, handle it separately
 			const isTTS = (t: Track | undefined) => {
 				if (!t) return false;
 				try {
@@ -367,7 +541,7 @@ export class Player extends EventEmitter {
 				}
 			};
 
-			const queryLooksTTS = typeof query === "string" && query.trim().toLowerCase().startsWith("tts");
+			const queryLooksTTS = typeof effectiveRequest.query === "string" && effectiveRequest.query.trim().toLowerCase().startsWith("tts");
 
 			if (
 				!isPlaylist &&
@@ -375,9 +549,15 @@ export class Player extends EventEmitter {
 				this.options?.tts?.interrupt !== false &&
 				(isTTS(tracksToAdd[0]) || queryLooksTTS)
 			) {
-				// Interrupt music playback with TTS (do not modify the music queue)
 				this.debug(`[Player] Interrupting with TTS: ${tracksToAdd[0].title}`);
 				await this.interruptWithTTSTrack(tracksToAdd[0]);
+				await this.runAfterPlayHooks({
+					success: true,
+					query: effectiveRequest.query,
+					requestedBy: effectiveRequest.requestedBy,
+					tracks: tracksToAdd,
+					isPlaylist,
+				});
 				return true;
 			}
 
@@ -385,17 +565,30 @@ export class Player extends EventEmitter {
 				this.queue.addMultiple(tracksToAdd);
 				this.emit("queueAddList", tracksToAdd);
 			} else {
-				this.queue.add(tracksToAdd?.[0]);
-				this.emit("queueAdd", tracksToAdd?.[0]);
+				this.queue.add(tracksToAdd[0]);
+				this.emit("queueAdd", tracksToAdd[0]);
 			}
 
-			// Start playing if not already playing
-			if (!this.isPlaying) {
-				return this.playNext();
-			}
+			const started = !this.isPlaying ? await this.playNext() : true;
 
-			return true;
+			await this.runAfterPlayHooks({
+				success: started,
+				query: effectiveRequest.query,
+				requestedBy: effectiveRequest.requestedBy,
+				tracks: tracksToAdd,
+				isPlaylist,
+			});
+
+			return started;
 		} catch (error) {
+			await this.runAfterPlayHooks({
+				success: false,
+				query: effectiveRequest.query,
+				requestedBy: effectiveRequest.requestedBy,
+				tracks: tracksToAdd,
+				isPlaylist,
+				error: error as Error,
+			});
 			this.debug(`[Player] Play error:`, error);
 			this.emit("playerError", error as Error);
 			return false;
@@ -850,6 +1043,13 @@ export class Player extends EventEmitter {
 
 		this.queue.clear();
 		this.pluginManager.clear();
+		for (const extension of [...this.extensions]) {
+			this.invokeExtensionLifecycle(extension, "onDestroy");
+			if (extension.player === this) {
+				extension.player = null;
+			}
+		}
+		this.extensions = [];
 		this.isPlaying = false;
 		this.isPaused = false;
 		this.emit("playerDestroy");
