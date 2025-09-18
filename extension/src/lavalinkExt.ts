@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosResponse } from "axios";
+import axios, { AxiosInstance } from "axios";
 import WebSocket from "ws";
 import { BaseExtension, Player, PlayerManager, Track, SearchResult } from "ziplayer";
 import type {
@@ -576,8 +576,7 @@ export class lavalinkExt extends BaseExtension {
 		if (t === "VOICE_SERVER_UPDATE") {
 			const token: string | undefined = data?.token;
 			if (!token) return;
-			const rawEndpoint: string | null = typeof data?.endpoint === "string" ? data.endpoint : null;
-			const endpoint = this.normalizeVoiceEndpoint(rawEndpoint);
+			const endpoint: string | null = typeof data?.endpoint === "string" ? data.endpoint : null;
 			const resolvedGuildId = String(data?.guild_id ?? data?.guildId ?? guildId);
 			const rawEvent: VoiceServerRawEvent = {
 				...(typeof data === "object" && data !== null ? data : {}),
@@ -594,30 +593,16 @@ export class lavalinkExt extends BaseExtension {
 				guildId: resolvedGuildId,
 				rawEvent,
 			};
-			this.debug(
-				`VOICE_SERVER_UPDATE for guild ${guildId}: endpoint=${endpoint ?? "null"} raw=${
-					rawEndpoint ?? "null"
-				} token=${this.maskIdentifier(token)}`,
-				this.sanitizeDebugValue(rawEvent),
-			);
+			this.debug(`VOICE_SERVER_UPDATE for guild ${guildId}`);
 		} else if (t === "VOICE_STATE_UPDATE") {
 			const userId = data?.user_id ?? data?.userId;
-			if (this.userId && userId !== this.userId) {
-				this.debug(
-					`Ignoring VOICE_STATE_UPDATE for guild ${guildId}: mismatched user (${userId ?? "unknown"}) expected ${this.userId}`,
-				);
-				return;
-			}
+			if (this.userId && userId !== this.userId) return;
 			state.voiceState = {
 				sessionId: data?.session_id ?? null,
 				channelId: data?.channel_id ?? null,
 			};
 			state.channelId = data?.channel_id ?? null;
-			this.debug(
-				`VOICE_STATE_UPDATE for guild ${guildId}: channel=${state.channelId ?? "null"} session=${this.maskIdentifier(
-					state.voiceState.sessionId,
-				)}`,
-			);
+			this.debug(`VOICE_STATE_UPDATE for guild ${guildId} (channel ${state.channelId ?? "null"})`);
 			if (!state.channelId) {
 				state.playing = false;
 				state.paused = false;
@@ -630,26 +615,10 @@ export class lavalinkExt extends BaseExtension {
 		}
 
 		if (state.voiceState?.sessionId && state.voiceServer?.token && state.voiceServer?.endpoint) {
-			const summary = this.describeVoiceState(guildId, state);
-			const connectedNodes = this.nodes.filter((node) => node.connected);
-			this.debug(
-				`Voice handshake ready for ${summary}; connectedNodes=${
-					connectedNodes.map((node) => node.identifier).join(", ") || "none"
-				}`,
-			);
-			if (this.voiceWaiters.has(guildId)) {
-				this.debug(`Resolving pending voice waiter for guild ${guildId}`);
-				this.voiceWaiters.get(guildId)?.resolve();
-			}
-			if (connectedNodes.length === 0) {
-				this.debug(`No connected nodes available to receive voiceUpdate for guild ${guildId}`);
-			}
+			this.voiceWaiters.get(guildId)?.resolve();
+			this.voiceWaiters.delete(guildId);
 			for (const node of this.nodes) {
-				if (!node.connected) {
-					this.debug(`Skipping voiceUpdate for ${guildId} -> ${node.identifier}: node not connected`);
-					continue;
-				}
-				this.debug(`Dispatching voiceUpdate for ${guildId} -> ${node.identifier}`);
+				if (!node.connected) continue;
 				this.sendVoiceUpdate(node, guildId, state).catch((error) =>
 					this.debug(`Failed to send voiceUpdate for ${guildId} to ${node.identifier}`, error),
 				);
@@ -986,17 +955,10 @@ export class lavalinkExt extends BaseExtension {
 
 	private async waitForVoice(player: Player): Promise<void> {
 		const state = this.playerStates.get(player);
-		if (!state) {
-			this.debug(`waitForVoice called for guild ${player.guildId} but no state was found`);
-			return;
-		}
-		if (state.voiceState?.sessionId && state.voiceServer?.token && state.voiceServer?.endpoint) {
-			this.debug(`waitForVoice immediate success for ${this.describeVoiceState(player.guildId, state)}`);
-			return;
-		}
+		if (!state) return;
+		if (state.voiceState?.sessionId && state.voiceServer?.token && state.voiceServer?.endpoint) return;
 		const guildId = player.guildId;
 		if (this.voiceWaiters.has(guildId)) {
-			this.debug(`waitForVoice reusing existing waiter for guild ${guildId}`);
 			return new Promise((resolve, reject) => {
 				const existing = this.voiceWaiters.get(guildId)!;
 				const originalResolve = existing.resolve;
@@ -1012,23 +974,19 @@ export class lavalinkExt extends BaseExtension {
 			});
 		}
 
-		this.debug(`waitForVoice creating waiter for guild ${guildId} (timeout=${this.options.connectTimeoutMs ?? 15_000}ms)`);
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
-				this.debug(`waitForVoice timed out for guild ${guildId}`);
 				this.voiceWaiters.delete(guildId);
 				reject(new Error("Voice connection timed out"));
 			}, this.options.connectTimeoutMs ?? 15_000);
 			this.voiceWaiters.set(guildId, {
 				resolve: () => {
 					clearTimeout(timer);
-					this.debug(`waitForVoice resolved for guild ${guildId}`);
 					this.voiceWaiters.delete(guildId);
 					resolve();
 				},
 				reject: (error: Error) => {
 					clearTimeout(timer);
-					this.debug(`waitForVoice rejected for guild ${guildId}: ${error.message}`);
 					this.voiceWaiters.delete(guildId);
 					reject(error);
 				},
@@ -1048,7 +1006,6 @@ export class lavalinkExt extends BaseExtension {
 		}
 
 		if (this.options.sendGatewayPayload) {
-			this.debug(`connect sending custom gateway payload for guild ${guildId} channel ${channelId}`);
 			await this.options.sendGatewayPayload(guildId, {
 				op: 4,
 				d: {
@@ -1063,7 +1020,6 @@ export class lavalinkExt extends BaseExtension {
 		}
 
 		if (!original) throw new Error("Player connect method missing");
-		this.debug(`connect using player's original method for guild ${guildId} channel ${channelId}`);
 		const connection = await original(channel);
 		await this.waitForVoice(player).catch((error) => this.debug(`Voice wait failed: ${error.message}`));
 		return connection;
@@ -1073,28 +1029,11 @@ export class lavalinkExt extends BaseExtension {
 		const node = await this.ensureNodeForPlayer(player);
 		const state = this.playerStates.get(player);
 		if (!state) throw new Error("Missing state for player");
-		this.debug(
-			`startNextOnLavalink invoked for guild ${player.guildId}: ignoreLoop=${ignoreLoop} currentNode=${
-				state.node?.identifier ?? "none"
-			} skipNext=${state.skipNext}`,
-		);
 
-		const pendingSkip = state.skipNext;
-		const track = player.queue.next(ignoreLoop || pendingSkip);
-		this.debug(
-			`startNextOnLavalink queue result for guild ${player.guildId}: track=${
-				track ? `${track.title} (${track.id})` : "none"
-			} pendingSkip=${pendingSkip}`,
-		);
+		const track = player.queue.next(ignoreLoop || state.skipNext);
 		state.skipNext = false;
 		if (!track) {
-			const autoPlayEnabled = typeof player.queue.autoPlay === "function" && player.queue.autoPlay();
-			this.debug(
-				`startNextOnLavalink no track for guild ${player.guildId}: autoPlay=${autoPlayEnabled} queueLength=${
-					(player.queue as any)?.tracks?.length ?? "unknown"
-				}`,
-			);
-			if (autoPlayEnabled) {
+			if (player.queue.autoPlay()) {
 				const nextAuto = player.queue.willNextTrack();
 				if (nextAuto) {
 					player.queue.addMultiple([nextAuto]);
@@ -1120,16 +1059,8 @@ export class lavalinkExt extends BaseExtension {
 		}
 
 		try {
-			this.debug(
-				`startNextOnLavalink preparing track for guild ${player.guildId}: title="${track.title}" requestedBy=${track.requestedBy} duration=${track.duration}`,
-			);
 			await this.ensureTrackEncoded(player, track, track.requestedBy ?? "Unknown");
 			const encoded = this.getEncoded(track);
-			this.debug(
-				`startNextOnLavalink encoded payload status for guild ${player.guildId} track=${track.id}: encoded=${
-					encoded ? `[${encoded.length} chars]` : "null"
-				}`,
-			);
 			if (!encoded) throw new Error("Track has no Lavalink payload");
 			track.metadata = {
 				...(track.metadata ?? {}),
@@ -1150,11 +1081,6 @@ export class lavalinkExt extends BaseExtension {
 				encodedTrack: encoded,
 				volume: player.volume ?? state.volume ?? 100,
 			});
-			this.debug(
-				`startNextOnLavalink dispatched track for guild ${player.guildId} on node ${node.identifier}: title="${
-					track.title
-				}" volume=${player.volume ?? state.volume ?? 100}`,
-			);
 			return true;
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
@@ -1166,15 +1092,9 @@ export class lavalinkExt extends BaseExtension {
 
 	private async updatePlayer(node: InternalNode, guildId: string, payload: Record<string, any>): Promise<void> {
 		if (!node.sessionId) throw new Error("Node session not ready");
-		const sanitizedPayload = this.sanitizeDebugValue(payload);
-		this.debug(`updatePlayer sending payload for ${guildId} on ${node.identifier}`, sanitizedPayload);
-		try {
-			const response: AxiosResponse = await node.rest.patch(`/sessions/${node.sessionId}/players/${guildId}`, payload);
-			this.debug(`updatePlayer success for ${guildId} on ${node.identifier} (status=${response.status})`);
-		} catch (error) {
-			this.debug(`updatePlayer failed for ${guildId} on ${node.identifier}`, sanitizedPayload, error);
+		await node.rest.patch(`/sessions/${node.sessionId}/players/${guildId}`, payload).catch((error) => {
 			throw error;
-		}
+		});
 	}
 
 	private async destroyLavalinkPlayer(player: Player): Promise<void> {
@@ -1192,15 +1112,8 @@ export class lavalinkExt extends BaseExtension {
 	}
 
 	private async sendVoiceUpdate(node: InternalNode, guildId: string, state: LavalinkPlayerState): Promise<void> {
-		if (!state.voiceState?.sessionId || !state.voiceServer?.token || !state.voiceServer.endpoint) {
-			this.debug(
-				`sendVoiceUpdate skipped for ${guildId} -> ${node.identifier}: incomplete voice data (${this.describeVoiceState(
-					guildId,
-					state,
-				)})`,
-			);
-			return;
-		}
+		if (!node.ws || node.ws.readyState !== WebSocket.OPEN) return;
+		if (!state.voiceState?.sessionId || !state.voiceServer) return;
 		const eventPayload = state.voiceServer.rawEvent ?? {
 			token: state.voiceServer.token,
 			endpoint: state.voiceServer.endpoint,
@@ -1212,101 +1125,7 @@ export class lavalinkExt extends BaseExtension {
 			sessionId: state.voiceState.sessionId,
 			event: eventPayload,
 		};
-		this.debug(
-			`sendVoiceUpdate preparing payload for ${guildId} -> ${node.identifier}: ${this.describeVoiceState(guildId, state)}`,
-			this.sanitizeDebugValue(payload),
-		);
-		const wsReady = node.ws?.readyState === WebSocket.OPEN;
-		this.debug(
-			`sendVoiceUpdate transport for ${guildId} -> ${node.identifier}: wsReady=${wsReady} wsState=${
-				node.ws?.readyState ?? "none"
-			} restSession=${this.maskIdentifier(node.sessionId ?? null)}`,
-		);
-		if (node.ws && node.ws.readyState === WebSocket.OPEN) {
-			node.ws.send(JSON.stringify(payload));
-			this.debug(`sendVoiceUpdate dispatched over websocket for ${guildId} -> ${node.identifier}`);
-		} else {
-			this.debug(
-				`sendVoiceUpdate websocket skipped for ${guildId} -> ${node.identifier}: readyState=${node.ws?.readyState ?? "none"}`,
-			);
-		}
-
-		if (!node.sessionId) {
-			this.debug(`sendVoiceUpdate cannot persist voice state for ${guildId} on ${node.identifier}: sessionId missing`);
-			return;
-		}
-
-		try {
-			const response: AxiosResponse = await node.rest.patch(`/sessions/${node.sessionId}/players/${guildId}`, {
-				voice: {
-					token: state.voiceServer.token,
-					endpoint: state.voiceServer.endpoint,
-					sessionId: state.voiceState.sessionId,
-				},
-			});
-			this.debug(`Persisted voice state for ${guildId} on ${node.identifier} (status=${response.status})`);
-		} catch (error) {
-			this.debug(`Failed to persist voice state for ${guildId} on ${node.identifier}`, error);
-		}
-	}
-
-	private normalizeVoiceEndpoint(endpoint: string | null | undefined): string | null {
-		if (!endpoint || typeof endpoint !== "string") return null;
-		return endpoint.replace(/:(?:80|443)$/i, "");
-	}
-
-	private maskIdentifier(value: string | null | undefined): string {
-		if (!value) return "null";
-		const trimmed = value.trim();
-		if (trimmed.length <= 8) return trimmed;
-		return `${trimmed.slice(0, 4)}…${trimmed.slice(-4)}(${trimmed.length})`;
-	}
-
-	private describeVoiceState(guildId: string, state: LavalinkPlayerState): string {
-		const channel = state.channelId ?? state.voiceState?.channelId ?? "null";
-		const session = this.maskIdentifier(state.voiceState?.sessionId ?? null);
-		const token = this.maskIdentifier(state.voiceServer?.token ?? null);
-		const endpoint = state.voiceServer?.endpoint ?? "null";
-		return `guild=${guildId} channel=${channel} session=${session} token=${token} endpoint=${endpoint}`;
-	}
-
-	private sanitizeDebugValue<T>(value: T): T {
-		if (Array.isArray(value)) {
-			return value.map((entry) => this.sanitizeDebugValue(entry)) as unknown as T;
-		}
-		if (value === null || value === undefined) {
-			return value;
-		}
-		if (typeof value === "string") {
-			if (value.length > 160) {
-				return `${value.slice(0, 24)}…(${value.length})` as unknown as T;
-			}
-			return value;
-		}
-		if (typeof value !== "object") {
-			return value;
-		}
-
-		const result: Record<string, any> = {};
-		for (const [key, entry] of Object.entries(value as Record<string, any>)) {
-			if (typeof entry === "string") {
-				if (/token/i.test(key) || /session/i.test(key)) {
-					result[key] = this.maskIdentifier(entry);
-					continue;
-				}
-				if (/encoded/i.test(key) || key === "track") {
-					result[key] = `[${key}:${entry.length}chars]`;
-					continue;
-				}
-				if (entry.length > 160) {
-					result[key] = `${entry.slice(0, 24)}…(${entry.length})`;
-					continue;
-				}
-			}
-			result[key] = this.sanitizeDebugValue(entry);
-		}
-
-		return result as unknown as T;
+		node.ws.send(JSON.stringify(payload));
 	}
 
 	private pause(player: Player): boolean {

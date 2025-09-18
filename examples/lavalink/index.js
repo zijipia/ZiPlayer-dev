@@ -50,7 +50,7 @@ const lavalink = new lavalinkExt(null, {
 });
 
 const manager = new PlayerManager({
-	// plugins: [new YouTubePlugin(), new SoundCloudPlugin(), new SpotifyPlugin()],
+	plugins: [new YouTubePlugin(), new SoundCloudPlugin(), new SpotifyPlugin()],
 	extensions: [lavalink],
 });
 

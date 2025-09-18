@@ -16,8 +16,24 @@ import {
 import { VoiceChannel } from "discord.js";
 import { Readable } from "stream";
 import { BaseExtension } from "../extensions";
-import { Track, PlayerOptions, PlayerEvents, SourcePlugin, SearchResult, ProgressBarOptions, LoopMode, StreamInfo } from "../types";
-import type { ExtensionContext, ExtensionPlayRequest, ExtensionPlayResponse, ExtensionAfterPlayPayload, ExtensionStreamRequest, ExtensionSearchRequest } from "../types";
+import {
+	Track,
+	PlayerOptions,
+	PlayerEvents,
+	SourcePlugin,
+	SearchResult,
+	ProgressBarOptions,
+	LoopMode,
+	StreamInfo,
+} from "../types";
+import type {
+	ExtensionContext,
+	ExtensionPlayRequest,
+	ExtensionPlayResponse,
+	ExtensionAfterPlayPayload,
+	ExtensionStreamRequest,
+	ExtensionSearchRequest,
+} from "../types";
 import { Queue } from "./Queue";
 import { PluginManager } from "../plugins";
 import type { PlayerManager } from "./PlayerManager";
@@ -78,7 +94,9 @@ export class Player extends EventEmitter {
 		}
 	}
 
-	private async runBeforePlayHooks(initial: ExtensionPlayRequest): Promise<{ request: ExtensionPlayRequest; response: ExtensionPlayResponse }> {
+	private async runBeforePlayHooks(
+		initial: ExtensionPlayRequest,
+	): Promise<{ request: ExtensionPlayRequest; response: ExtensionPlayResponse }> {
 		const request: ExtensionPlayRequest = { ...initial };
 		const response: ExtensionPlayResponse = {};
 		for (const extension of this.extensions) {
@@ -541,7 +559,8 @@ export class Player extends EventEmitter {
 				}
 			};
 
-			const queryLooksTTS = typeof effectiveRequest.query === "string" && effectiveRequest.query.trim().toLowerCase().startsWith("tts");
+			const queryLooksTTS =
+				typeof effectiveRequest.query === "string" && effectiveRequest.query.trim().toLowerCase().startsWith("tts");
 
 			if (
 				!isPlaylist &&
@@ -641,15 +660,8 @@ export class Player extends EventEmitter {
 			// Derive timeout from resource/track duration when available, with a sensible cap
 			const md: any = (resource as any)?.metadata ?? {};
 			const declared =
-				typeof md.duration === "number" ? md.duration
-				: typeof next?.duration === "number" ? next.duration
-				: undefined;
-			const declaredMs =
-				declared ?
-					declared > 1000 ?
-						declared
-					:	declared * 1000
-				:	undefined;
+				typeof md.duration === "number" ? md.duration : typeof next?.duration === "number" ? next.duration : undefined;
+			const declaredMs = declared ? (declared > 1000 ? declared : declared * 1000) : undefined;
 			const cap = this.options?.tts?.Max_Time_TTS ?? 60_000;
 			const idleTimeout = declaredMs ? Math.min(cap, Math.max(1_000, declaredMs + 1_500)) : cap;
 			await entersState(ttsPlayer, AudioPlayerStatus.Idle, idleTimeout).catch(() => null);
