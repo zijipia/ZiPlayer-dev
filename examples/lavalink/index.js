@@ -11,8 +11,26 @@ if (!TOKEN) {
 	throw new Error("Missing DISCORD_TOKEN environment variable");
 }
 
+const client = new Client({
+	intents: [
+		GatewayIntentBits.Guilds,
+		GatewayIntentBits.GuildMessages,
+		GatewayIntentBits.GuildVoiceStates,
+		GatewayIntentBits.GuildMembers,
+		GatewayIntentBits.MessageContent,
+	],
+	partials: [Partials.Channel],
+});
+
 const lavalink = new lavalinkExt(null, {
 	nodes: [
+		{
+			identifier: "AjieDev-V4",
+			password: "https://dsc.gg/ajidevserver",
+			host: "lava-v4.ajieblogs.eu.org",
+			port: 443,
+			secure: true,
+		},
 		{
 			identifier: "Serenetia-V4",
 			password: "https://dsc.gg/ajidevserver",
@@ -27,16 +45,8 @@ const lavalink = new lavalinkExt(null, {
 			port: 443,
 			secure: true,
 		},
-		{
-			identifier: "AjieDev-V4",
-			password: "https://dsc.gg/ajidevserver",
-			host: "lava-v4.ajieblogs.eu.org",
-			port: 443,
-			secure: true,
-		},
 	],
-	nodeSort: "players",
-	searchPrefix: "ytsearch",
+	client: client,
 });
 
 const manager = new PlayerManager({
@@ -50,17 +60,6 @@ manager.on("trackStart", (player, track) => {
 });
 
 manager.on("debug", console.log);
-
-const client = new Client({
-	intents: [
-		GatewayIntentBits.Guilds,
-		GatewayIntentBits.GuildMessages,
-		GatewayIntentBits.GuildVoiceStates,
-		GatewayIntentBits.GuildMembers,
-		GatewayIntentBits.MessageContent,
-	],
-	partials: [Partials.Channel],
-});
 
 client.once("ready", () => console.log(`Logged in as ${client.user.tag}`));
 
