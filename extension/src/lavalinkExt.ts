@@ -73,6 +73,9 @@ export class lavalinkExt extends BaseExtension {
 		this.trackResolver = new TrackResolver(this.options.debug ?? false);
 		this.voiceHandler = new VoiceHandler(this.options.debug ?? false);
 
+		// Setup WebSocket event handlers
+		this.setupWebSocketEventHandlers();
+
 		this.client = opts.client;
 		this.userId = opts.userId;
 
@@ -142,6 +145,34 @@ export class lavalinkExt extends BaseExtension {
 		);
 	}
 
+	private setupWebSocketEventHandlers(): void {
+		// Handle player updates from WebSocket instead of polling
+		this.nodeManager.onWebSocketEvent("playerUpdate", (node, message) => {
+			this.handleWebSocketPlayerUpdate(node, message);
+		});
+
+		// Handle Lavalink events
+		this.nodeManager.onWebSocketEvent("TrackStartEvent", (node, message) => {
+			this.handleWebSocketTrackStart(node, message);
+		});
+
+		this.nodeManager.onWebSocketEvent("TrackEndEvent", (node, message) => {
+			this.handleWebSocketTrackEnd(node, message);
+		});
+
+		this.nodeManager.onWebSocketEvent("TrackExceptionEvent", (node, message) => {
+			this.handleWebSocketTrackException(node, message);
+		});
+
+		this.nodeManager.onWebSocketEvent("TrackStuckEvent", (node, message) => {
+			this.handleWebSocketTrackStuck(node, message);
+		});
+
+		this.nodeManager.onWebSocketEvent("WebSocketClosedEvent", (node, message) => {
+			this.handleWebSocketClosed(node, message);
+		});
+	}
+
 	private async initializeNodes(): Promise<void> {
 		this.debug("Initializing nodes");
 		if (this.isReady) return;
@@ -157,7 +188,8 @@ export class lavalinkExt extends BaseExtension {
 
 	private startUpdateLoop(): void {
 		if (this.updateTimer) return;
-		const interval = this.options.updateInterval ?? 5_000;
+		// Increase interval since WebSocket handles most updates in real-time
+		const interval = this.options.updateInterval ?? 30_000; // 30 seconds instead of 5
 		this.updateTimer = setInterval(() => {
 			this.updateAllPlayers().catch((error) => this.debug("Update loop error", error));
 		}, interval);
@@ -168,6 +200,104 @@ export class lavalinkExt extends BaseExtension {
 			clearInterval(this.updateTimer);
 			this.updateTimer = undefined;
 		}
+	}
+
+	// WebSocket event handlers
+	private handleWebSocketPlayerUpdate(node: any, message: any): void {
+		const player = this.playerStateManager.getPlayerByGuildId(message.guildId);
+		if (!player) return;
+
+		const state = this.playerStateManager.getState(player);
+		if (!state || state.node !== node) return;
+
+		// Update position from WebSocket data
+		state.lastPosition = message.state.position ?? 0;
+		this.debug(
+			`WebSocket player update for guild ${message.guildId}: position=${message.state.position}, connected=${message.state.connected}`,
+		);
+	}
+
+	private handleWebSocketTrackStart(node: any, message: any): void {
+		const player = this.playerStateManager.getPlayerByGuildId(message.guildId);
+		if (!player) return;
+
+		const state = this.playerStateManager.getState(player);
+		if (!state || state.node !== node) return;
+
+		const track = this.trackResolver.resolveTrackFromLavalink(player, message.track);
+		if (track) {
+			state.track = track;
+			state.playing = true;
+			state.paused = false;
+			player.isPlaying = true;
+			player.isPaused = false;
+			player.emit("trackStart", track);
+			this.debug(`WebSocket track start for guild ${message.guildId}: ${track.title}`);
+		}
+	}
+
+	private handleWebSocketTrackEnd(node: any, message: any): void {
+		const player = this.playerStateManager.getPlayerByGuildId(message.guildId);
+		if (!player) return;
+
+		const state = this.playerStateManager.getState(player);
+		if (!state || state.node !== node) return;
+
+		const track = state.track;
+		if (track) {
+			player.emit("trackEnd", track);
+			this.debug(`WebSocket track end for guild ${message.guildId}: ${track.title}, reason=${message.reason}`);
+		}
+
+		// Handle track end based on reason
+		if (message.reason === "finished" || message.reason === "loadFailed") {
+			state.track = null;
+			state.playing = false;
+			player.isPlaying = false;
+
+			if (!state.skipNext) {
+				this.startNextOnLavalink(player).catch((error) => this.debug(`Failed to start next track for ${player.guildId}`, error));
+			}
+			state.skipNext = false;
+		} else if (message.reason === "stopped" || message.reason === "replaced" || message.reason === "cleanup") {
+			state.track = null;
+			state.playing = false;
+			player.isPlaying = false;
+		}
+	}
+
+	private handleWebSocketTrackException(node: any, message: any): void {
+		const player = this.playerStateManager.getPlayerByGuildId(message.guildId);
+		if (!player) return;
+
+		const state = this.playerStateManager.getState(player);
+		if (!state || state.node !== node) return;
+
+		const error = new Error(message.exception?.message || "Track exception occurred");
+		player.emit("playerError", error, state.track);
+		this.debug(`WebSocket track exception for guild ${message.guildId}:`, message.exception);
+	}
+
+	private handleWebSocketTrackStuck(node: any, message: any): void {
+		const player = this.playerStateManager.getPlayerByGuildId(message.guildId);
+		if (!player) return;
+
+		const state = this.playerStateManager.getState(player);
+		if (!state || state.node !== node) return;
+
+		player.emit("playerError", new Error(`Track stuck: threshold exceeded ${message.thresholdMs}ms`), state.track);
+		this.debug(`WebSocket track stuck for guild ${message.guildId}: threshold=${message.thresholdMs}ms`);
+	}
+
+	private handleWebSocketClosed(node: any, message: any): void {
+		const player = this.playerStateManager.getPlayerByGuildId(message.guildId);
+		if (!player) return;
+
+		const state = this.playerStateManager.getState(player);
+		if (!state || state.node !== node) return;
+
+		player.emit("playerError", new Error(`WebSocket closed: ${message.code} ${message.reason}`), state.track);
+		this.debug(`WebSocket closed for guild ${message.guildId}: ${message.code} ${message.reason}`);
 	}
 
 	private async updateAllPlayers(): Promise<void> {
@@ -187,8 +317,10 @@ export class lavalinkExt extends BaseExtension {
 		if (!state.node || !state.node.wsConnected) return;
 		const node = state.node;
 
+		// With WebSocket events handling most updates, we only need to do minimal REST polling
+		// This is now mainly for cleanup and fallback scenarios
 		try {
-			// Get player info from Lavalink
+			// Only check if player exists on Lavalink (lightweight check)
 			const playerInfo = await this.nodeManager.getPlayerInfo(node, player.guildId);
 
 			if (!playerInfo) {
@@ -201,43 +333,7 @@ export class lavalinkExt extends BaseExtension {
 				return;
 			}
 
-			// Update position
-			if (playerInfo.state) {
-				state.lastPosition = playerInfo.state.position ?? 0;
-			} else if (playerInfo.track && state.track) {
-				state.lastPosition = playerInfo.track.info.position ?? 0;
-			}
-
-			// Check if track ended
-			if (!playerInfo.track && state.track && state.playing) {
-				const track = state.track;
-				player.emit("trackEnd", track);
-				state.track = null;
-				state.playing = false;
-				player.isPlaying = false;
-
-				if (!state.skipNext) {
-					this.startNextOnLavalink(player).catch((error) =>
-						this.debug(`Failed to start next track for ${player.guildId}`, error),
-					);
-				}
-				state.skipNext = false;
-			}
-
-			// Check if track started
-			if (playerInfo.track && !state.track && !state.playing) {
-				const track = this.trackResolver.resolveTrackFromLavalink(player, playerInfo.track);
-				if (track) {
-					state.track = track;
-					state.playing = true;
-					state.paused = false;
-					player.isPlaying = true;
-					player.isPaused = false;
-					player.emit("trackStart", track);
-				}
-			}
-
-			// Update pause state
+			// Only update pause state if it differs (WebSocket doesn't always send pause updates)
 			if (state.playing && playerInfo.paused !== state.paused) {
 				state.paused = playerInfo.paused;
 				player.isPaused = playerInfo.paused;
@@ -248,6 +344,12 @@ export class lavalinkExt extends BaseExtension {
 						player.emit("playerResume", state.track);
 					}
 				}
+			}
+
+			// Update volume if it changed
+			if (playerInfo.volume !== undefined && playerInfo.volume !== state.volume) {
+				state.volume = playerInfo.volume;
+				player.volume = playerInfo.volume;
 			}
 		} catch (error) {
 			// Player might not exist on this node, try to find another node

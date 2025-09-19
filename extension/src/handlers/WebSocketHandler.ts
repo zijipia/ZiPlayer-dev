@@ -10,6 +10,7 @@ import type {
 
 export class WebSocketHandler {
 	private debug: (message: string, ...optional: any[]) => void;
+	private eventCallbacks: Map<string, ((node: InternalNode, data: any) => void)[]> = new Map();
 
 	constructor(debug: boolean) {
 		this.debug = (message: string, ...optional: any[]) => {
@@ -128,15 +129,14 @@ export class WebSocketHandler {
 	}
 
 	private handlePlayerUpdate(node: InternalNode, message: LavalinkPlayerUpdateMessage): void {
-		// This will be handled by the main extension class
-		// We can emit events or use callbacks here
 		this.debug(`Player update for guild ${message.guildId} on node ${node.identifier}`);
+		this.emit("playerUpdate", node, message);
 	}
 
 	private handleLavalinkEvent(node: InternalNode, message: LavalinkEventMessage): void {
-		// This will be handled by the main extension class
-		// We can emit events or use callbacks here
 		this.debug(`Lavalink event ${message.type} for guild ${message.guildId} on node ${node.identifier}`);
+		this.emit("event", node, message);
+		this.emit(message.type, node, message);
 	}
 
 	closeWebSocket(node: InternalNode): void {
@@ -151,6 +151,37 @@ export class WebSocketHandler {
 	closeAllWebSockets(nodes: InternalNode[]): void {
 		for (const node of nodes) {
 			this.closeWebSocket(node);
+		}
+	}
+
+	// Event callback system
+	on(event: string, callback: (node: InternalNode, data: any) => void): void {
+		if (!this.eventCallbacks.has(event)) {
+			this.eventCallbacks.set(event, []);
+		}
+		this.eventCallbacks.get(event)!.push(callback);
+	}
+
+	off(event: string, callback: (node: InternalNode, data: any) => void): void {
+		const callbacks = this.eventCallbacks.get(event);
+		if (callbacks) {
+			const index = callbacks.indexOf(callback);
+			if (index > -1) {
+				callbacks.splice(index, 1);
+			}
+		}
+	}
+
+	private emit(event: string, node: InternalNode, data: any): void {
+		const callbacks = this.eventCallbacks.get(event);
+		if (callbacks) {
+			for (const callback of callbacks) {
+				try {
+					callback(node, data);
+				} catch (error) {
+					this.debug(`Error in event callback for ${event}`, error);
+				}
+			}
 		}
 	}
 }

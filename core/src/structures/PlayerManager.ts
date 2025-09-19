@@ -176,6 +176,10 @@ export class PlayerManager extends EventEmitter {
 		const guildId = this.resolveGuildId(guildOrId);
 		return this.players.get(guildId);
 	}
+	getPlayer(guildOrId: string | { id: string }): Player | undefined {
+		const guildId = this.resolveGuildId(guildOrId);
+		return this.players.get(guildId);
+	}
 
 	getall(): Player[] | [] {
 		return Array.from(this.players.values());

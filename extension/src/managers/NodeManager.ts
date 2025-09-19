@@ -162,6 +162,15 @@ export class NodeManager {
 		this.wsHandler.closeAllWebSockets(this.nodes);
 	}
 
+	// Expose WebSocket event handling
+	onWebSocketEvent(event: string, callback: (node: InternalNode, data: any) => void): void {
+		this.wsHandler.on(event, callback);
+	}
+
+	offWebSocketEvent(event: string, callback: (node: InternalNode, data: any) => void): void {
+		this.wsHandler.off(event, callback);
+	}
+
 	destroy(): void {
 		this.closeAllConnections();
 		this.nodes = [];
