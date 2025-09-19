@@ -724,7 +724,7 @@ export class lavalinkExt extends BaseExtension {
 			const { tracks, isPlaylist } = await this.resolvePlayRequest(player, payload.query, requestedBy);
 			if (tracks.length === 0) {
 				return {
-					handled: true,
+					handled: false,
 					success: false,
 					error: new Error("No tracks found"),
 				};
@@ -751,7 +751,7 @@ export class lavalinkExt extends BaseExtension {
 			const err = error instanceof Error ? error : new Error(String(error));
 			this.debug(`beforePlay error: ${err.message}`);
 			return {
-				handled: true,
+				handled: false,
 				success: false,
 				error: err,
 			};
