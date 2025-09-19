@@ -36,6 +36,7 @@ import type {
 } from "../types";
 import { Queue } from "./Queue";
 import { PluginManager } from "../plugins";
+import { withTimeout } from "../utils/timeout";
 import type { PlayerManager } from "./PlayerManager";
 export declare interface Player {
 	on<K extends keyof PlayerEvents>(event: K, listener: (...args: PlayerEvents[K]) => void): this;
@@ -210,7 +211,7 @@ export class Player extends EventEmitter {
 				this.debug(`[Player] Using plugin: ${plugin.name}`);
 				this.debug(`[Track] Track Info:`, track);
 				try {
-					streamInfo = await this.withTimeout(plugin.getStream(track), "getStream timed out");
+					streamInfo = await withTimeout(plugin.getStream(track), this.options.extractorTimeout ?? 15000, "getStream timed out");
 				} catch (streamError) {
 					this.debug(`[Player] getStream failed, trying getFallback:`, streamError);
 					const allplugs = this.pluginManager.getAll();
@@ -219,7 +220,11 @@ export class Player extends EventEmitter {
 							continue;
 						}
 						try {
-							streamInfo = await this.withTimeout((p as any).getFallback(track), `getFallback timed out for plugin ${p.name}`);
+							streamInfo = await withTimeout(
+								(p as any).getFallback(track),
+								this.options.extractorTimeout ?? 15000,
+								`getFallback timed out for plugin ${p.name}`,
+							);
 							if (!(streamInfo as any)?.stream) continue;
 							this.debug(`[Player] getFallback succeeded with plugin ${p.name} for track: ${track.title}`);
 							break;
@@ -292,11 +297,6 @@ export class Player extends EventEmitter {
 			this.leaveTimeout = null;
 			this.debug(`[Player] Cleared leave timeout`);
 		}
-	}
-
-	private withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
-		const timeout = this.options.extractorTimeout ?? 15000;
-		return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), timeout))]);
 	}
 
 	private debug(message?: any, ...optionalParams: any[]): void {
@@ -479,7 +479,11 @@ export class Player extends EventEmitter {
 		for (const p of plugins) {
 			try {
 				this.debug(`[Player] Trying plugin for search: ${p.name}`);
-				const res = await this.withTimeout(p.search(query, requestedBy), `Search operation timed out for ${p.name}`);
+				const res = await withTimeout(
+					p.search(query, requestedBy),
+					this.options.extractorTimeout ?? 15000,
+					`Search operation timed out for ${p.name}`,
+				);
 				if (res && Array.isArray(res.tracks) && res.tracks.length > 0) {
 					this.debug(`[Player] Plugin '${p.name}' returned ${res.tracks.length} tracks`);
 					return res;
@@ -693,15 +697,16 @@ export class Player extends EventEmitter {
 
 		let streamInfo: any;
 		try {
-			streamInfo = await this.withTimeout(plugin.getStream(track), "getStream timed out");
+			streamInfo = await withTimeout(plugin.getStream(track), this.options.extractorTimeout ?? 15000, "getStream timed out");
 		} catch (streamError) {
 			// try fallbacks
 			const allplugs = this.pluginManager.getAll();
 			for (const p of allplugs) {
 				if (typeof (p as any).getFallback !== "function") continue;
 				try {
-					streamInfo = await this.withTimeout(
+					streamInfo = await withTimeout(
 						(p as any).getFallback(track),
+						this.options.extractorTimeout ?? 15000,
 						`getFallback timed out for plugin ${(p as any).name}`,
 					);
 					if (!streamInfo?.stream) continue;
@@ -749,11 +754,12 @@ export class Player extends EventEmitter {
 		for (const p of candidates) {
 			try {
 				this.debug(`[Player] Trying related from plugin: ${p.name}`);
-				const related = await this.withTimeout(
+				const related = await withTimeout(
 					(p as any).getRelatedTracks(lastTrack.url, {
 						limit: 10,
 						history: this.queue.previousTracks,
 					}),
+					this.options.extractorTimeout ?? 15000,
 					`getRelatedTracks timed out for ${p.name}`,
 				);
 

@@ -15,8 +15,7 @@ export abstract class BaseExtension implements SourceExtension {
 	abstract name: string;
 	abstract version: string;
 	abstract player: Player | null;
-
-	abstract active(alas: any): boolean;
+	abstract active(alas: any): boolean | Promise<boolean>;
 
 	onRegister?(context: ExtensionContext): void | Promise<void>;
 	onDestroy?(context: ExtensionContext): void | Promise<void>;

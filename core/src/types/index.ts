@@ -166,11 +166,20 @@ export interface SourceExtension {
 	version: string;
 	connection?: VoiceConnection;
 	player: Player | null;
-	active(alas: any): boolean;
+	active(alas: any): boolean | Promise<boolean>;
 	onRegister?(context: ExtensionContext): void | Promise<void>;
 	onDestroy?(context: ExtensionContext): void | Promise<void>;
-	beforePlay?(context: ExtensionContext, payload: ExtensionPlayRequest): Promise<ExtensionPlayResponse | void> | ExtensionPlayResponse | void;
+	beforePlay?(
+		context: ExtensionContext,
+		payload: ExtensionPlayRequest,
+	): Promise<ExtensionPlayResponse | void> | ExtensionPlayResponse | void;
 	afterPlay?(context: ExtensionContext, payload: ExtensionAfterPlayPayload): Promise<void> | void;
-	provideSearch?(context: ExtensionContext, payload: ExtensionSearchRequest): Promise<SearchResult | null | undefined> | SearchResult | null | undefined;
-	provideStream?(context: ExtensionContext, payload: ExtensionStreamRequest): Promise<StreamInfo | null | undefined> | StreamInfo | null | undefined;
+	provideSearch?(
+		context: ExtensionContext,
+		payload: ExtensionSearchRequest,
+	): Promise<SearchResult | null | undefined> | SearchResult | null | undefined;
+	provideStream?(
+		context: ExtensionContext,
+		payload: ExtensionStreamRequest,
+	): Promise<StreamInfo | null | undefined> | StreamInfo | null | undefined;
 }

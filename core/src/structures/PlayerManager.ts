@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { Player } from "./Player";
 import { PlayerManagerOptions, PlayerOptions, Track, SourcePlugin, SearchResult } from "../types";
 import type { BaseExtension } from "../extensions";
+import { withTimeout } from "../utils/timeout";
 
 const GLOBAL_MANAGER_KEY: symbol = Symbol.for("ziplayer.PlayerManager.instance");
 export const getGlobalManager = (): PlayerManager | null => {
@@ -27,12 +28,12 @@ const setGlobalManager = (instance: PlayerManager): void => {
 export class PlayerManager extends EventEmitter {
 	private static instance: PlayerManager | null = null;
 	private players: Map<string, Player> = new Map();
-	static default(opt?: PlayerOptions): Player {
+	static async default(opt?: PlayerOptions): Promise<Player> {
 		let globaldef = getGlobalManager();
 		if (!globaldef) {
 			globaldef = new PlayerManager({});
 		}
-		return globaldef.create("default", opt);
+		return await globaldef.create("default", opt);
 	}
 	private plugins: SourcePlugin[];
 	private extensions: any[];
@@ -80,7 +81,7 @@ export class PlayerManager extends EventEmitter {
 		throw new Error("Invalid guild or guildId provided.");
 	}
 
-	create(guildOrId: string | { id: string }, options?: PlayerOptions): Player {
+	async create(guildOrId: string | { id: string }, options?: PlayerOptions): Promise<Player> {
 		const guildId = this.resolveGuildId(guildOrId);
 		if (this.players.has(guildId)) {
 			return this.players.get(guildId)!;
@@ -123,7 +124,11 @@ export class PlayerManager extends EventEmitter {
 				if (typeof extInstance.active === "function") {
 					let activated: boolean | void = true;
 					try {
-						activated = extInstance.active({ manager: this, player });
+						activated = await withTimeout(
+							Promise.resolve(extInstance.active({ manager: this, player })),
+							player.options.extractorTimeout ?? 15000,
+							`Extension ${extInstance?.name} activation timed out`,
+						);
 						this.debug(`[PlayerManager] Extension ${extInstance?.name} active`);
 					} catch (e) {
 						activated = false;

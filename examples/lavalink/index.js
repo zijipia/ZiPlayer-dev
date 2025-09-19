@@ -25,20 +25,6 @@ const client = new Client({
 const lavalink = new lavalinkExt(null, {
 	nodes: [
 		{
-			identifier: "AjieDev-V4",
-			password: "https://dsc.gg/ajidevserver",
-			host: "lava-v4.ajieblogs.eu.org",
-			port: 443,
-			secure: true,
-		},
-		{
-			identifier: "Serenetia-V4",
-			password: "https://dsc.gg/ajidevserver",
-			host: "lavalinkv4.serenetia.com",
-			port: 443,
-			secure: true,
-		},
-		{
 			identifier: "Fedot_Compot-main",
 			password: "https://discord.gg/bXXCZzKAyp",
 			host: "lavalink.fedotcompot.net",
@@ -47,10 +33,12 @@ const lavalink = new lavalinkExt(null, {
 		},
 	],
 	client: client,
+	searchPrefix: "scsearch",
+	debug: true,
 });
 
 const manager = new PlayerManager({
-	plugins: [new YouTubePlugin(), new SoundCloudPlugin(), new SpotifyPlugin()],
+	// plugins: [new YouTubePlugin(), new SoundCloudPlugin(), new SpotifyPlugin()],
 	extensions: [lavalink],
 });
 
@@ -67,6 +55,7 @@ const prefix = "!";
 
 client.on("messageCreate", async (message) => {
 	if (message.author.bot || !message.guildId || !message.content.startsWith(prefix)) return;
+	if (message.author.id !== "661968947327008768") return message.reply("You are not allowed to use this command.");
 
 	const [command, ...args] = message.content.slice(prefix.length).trim().split(/\s+/);
 	const voiceChannel = message.member?.voice?.channel;
@@ -94,7 +83,7 @@ client.on("messageCreate", async (message) => {
 					await message.reply("Join a voice channel first.");
 					return;
 				}
-				const player = ensurePlayer();
+				const player = await ensurePlayer();
 				await player.connect(voiceChannel);
 				await message.react("✅");
 				break;
@@ -109,7 +98,7 @@ client.on("messageCreate", async (message) => {
 					await message.reply("Usage: !play <url or search>");
 					return;
 				}
-				const player = ensurePlayer();
+				const player = await ensurePlayer();
 				if (!player.connection) await player.connect(voiceChannel);
 				await message.channel.send(`Searching: ${query}`);
 				const success = await player.play(query, message.author.id);

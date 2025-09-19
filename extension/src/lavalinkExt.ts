@@ -49,6 +49,7 @@ interface LavalinkLoadResponse {
 interface LavalinkStats {
 	players: number;
 	playingPlayers: number;
+	uptime: number;
 	cpu?: {
 		cores: number;
 		systemLoad: number;
@@ -60,68 +61,33 @@ interface LavalinkStats {
 		allocated: number;
 		reservable: number;
 	};
+	frameStats?: {
+		sent: number;
+		nulled: number;
+		deficit: number;
+	};
 }
 
-interface LavalinkReadyPayload {
-	op: "ready";
-	sessionId: string;
-	resumed: boolean;
-}
+// Lavalink v4 REST API interfaces
 
-interface LavalinkPlayerStatePayload {
-	op: "playerUpdate";
+interface LavalinkPlayerInfo {
 	guildId: string;
-	state: {
+	track?: LavalinkRawTrack | null;
+	volume: number;
+	paused: boolean;
+	voice: {
+		token: string;
+		endpoint: string;
+		sessionId: string;
+	};
+	filters?: Record<string, any>;
+	state?: {
 		time: number;
 		position: number;
 		connected: boolean;
 		ping: number;
 	};
 }
-
-type LavalinkEventPayload =
-	| {
-			op: "event";
-			type: "TrackStartEvent";
-			guildId: string;
-			track: LavalinkRawTrack;
-	  }
-	| {
-			op: "event";
-			type: "TrackEndEvent";
-			guildId: string;
-			track: LavalinkRawTrack;
-			reason: string;
-	  }
-	| {
-			op: "event";
-			type: "TrackExceptionEvent";
-			guildId: string;
-			track: LavalinkRawTrack;
-			exception: { message: string; severity: string; cause?: string };
-	  }
-	| {
-			op: "event";
-			type: "TrackStuckEvent";
-			guildId: string;
-			track: LavalinkRawTrack;
-			thresholdMs: number;
-	  }
-	| {
-			op: "event";
-			type: "WebSocketClosedEvent";
-			guildId: string;
-			code: number;
-			reason: string;
-			byRemote: boolean;
-	  };
-
-type LavalinkSocketMessage =
-	| LavalinkReadyPayload
-	| LavalinkPlayerStatePayload
-	| LavalinkEventPayload
-	| { op: "stats"; stats: LavalinkStats }
-	| { op: string; [key: string]: any };
 
 export interface LavalinkNodeOptions {
 	identifier?: string;
@@ -138,15 +104,12 @@ export interface LavalinkExtOptions {
 	client?: Client;
 	userId?: string;
 	sendGatewayPayload?: (guildId: string, payload: any) => Promise<void> | void;
-	shardCount?: number;
-	resumeKey?: string;
-	resumeTimeout?: number;
 	searchPrefix?: string;
 	nodeSort?: "players" | "cpu" | "memory" | "random";
 	requestTimeoutMs?: number;
-	reconnectDelayMs?: number;
-	connectTimeoutMs?: number;
 	clientName?: string;
+	updateInterval?: number; // Interval for polling player state updates
+	debug?: boolean;
 }
 
 interface InternalNode extends LavalinkNodeOptions {
@@ -154,14 +117,13 @@ interface InternalNode extends LavalinkNodeOptions {
 	rest: AxiosInstance;
 	ws?: WebSocket;
 	connected: boolean;
-	connecting: boolean;
-	reconnectAttempts: number;
 	stats?: LavalinkStats;
-	sessionId?: string;
 	players: Set<string>;
-	resumed?: boolean;
 	lastPing?: number;
-	closing?: boolean;
+	sessionId?: string;
+	wsConnected: boolean;
+	wsReconnectAttempts: number;
+	maxReconnectAttempts: number;
 }
 
 type VoiceServerRawEvent = {
@@ -193,6 +155,7 @@ interface LavalinkPlayerState {
 	voiceTimeout?: NodeJS.Timeout | null;
 	lastPosition?: number;
 	autoPlayChecked?: boolean;
+	updateInterval?: NodeJS.Timeout;
 }
 
 interface VoiceWaiter {
@@ -206,6 +169,59 @@ const isTrack = (value: any): value is Track => value && typeof value === "objec
 const isUrl = (value: string): boolean => /^(https?:\/\/|wss?:\/\/)/i.test(value);
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// WebSocket OP Types
+interface LavalinkWebSocketMessage {
+	op: string;
+	[key: string]: any;
+}
+
+interface LavalinkReadyMessage extends LavalinkWebSocketMessage {
+	op: "ready";
+	resumed: boolean;
+	sessionId: string;
+}
+
+interface LavalinkStatsMessage extends LavalinkWebSocketMessage {
+	op: "stats";
+	players: number;
+	playingPlayers: number;
+	uptime: number;
+	memory?: {
+		free: number;
+		used: number;
+		allocated: number;
+		reservable: number;
+	};
+	cpu?: {
+		cores: number;
+		systemLoad: number;
+		lavalinkLoad: number;
+	};
+	frameStats?: {
+		sent: number;
+		nulled: number;
+		deficit: number;
+	};
+}
+
+interface LavalinkPlayerUpdateMessage extends LavalinkWebSocketMessage {
+	op: "playerUpdate";
+	guildId: string;
+	state: {
+		time: number;
+		position: number;
+		connected: boolean;
+		ping: number;
+	};
+}
+
+interface LavalinkEventMessage extends LavalinkWebSocketMessage {
+	op: "event";
+	type: "TrackStartEvent" | "TrackEndEvent" | "TrackExceptionEvent" | "TrackStuckEvent" | "WebSocketClosedEvent";
+	guildId: string;
+	[key: string]: any;
+}
 
 export class lavalinkExt extends BaseExtension {
 	name = "lavalinkExt";
@@ -231,7 +247,8 @@ export class lavalinkExt extends BaseExtension {
 		}
 	>();
 	private readonly voiceWaiters = new Map<string, VoiceWaiter>();
-	private wsReady = false;
+	private isReady = false;
+	private updateTimer?: NodeJS.Timeout;
 
 	constructor(player: Player | null = null, opts: LavalinkExtOptions) {
 		super();
@@ -240,11 +257,10 @@ export class lavalinkExt extends BaseExtension {
 		}
 		this.player = player;
 		this.options = {
-			searchPrefix: "ytsearch",
+			searchPrefix: "scsearch",
 			nodeSort: "players",
 			requestTimeoutMs: 10_000,
-			reconnectDelayMs: 5_000,
-			connectTimeoutMs: 15_000,
+			updateInterval: 5_000,
 			...opts,
 		};
 		this.client = opts.client;
@@ -255,9 +271,10 @@ export class lavalinkExt extends BaseExtension {
 		if (this.client) {
 			this.bindClient(this.client);
 		}
+		// this.startUpdateLoop();
 	}
 
-	active(alas: any): boolean {
+	async active(alas: any): Promise<boolean> {
 		if (alas?.manager && !this.manager) {
 			this.manager = alas.manager as PlayerManager;
 		}
@@ -270,16 +287,29 @@ export class lavalinkExt extends BaseExtension {
 		if (player) {
 			this.attachToPlayer(player);
 		}
-		this.maybeConnectNodes();
+		await this.initializeNodes();
 		return true;
 	}
 
 	onRegister(context: ExtensionContext): void {
 		this.attachToPlayer(context.player);
+		this.startUpdateLoop();
 	}
 
 	onDestroy(context: ExtensionContext): void {
 		this.detachFromPlayer(context.player);
+		this.stopUpdateLoop();
+		this.closeAllWebSockets();
+	}
+
+	private closeAllWebSockets(): void {
+		for (const node of this.nodes) {
+			if (node.ws) {
+				node.ws.close(1000, "Extension destroyed");
+				node.ws = undefined;
+				node.wsConnected = false;
+			}
+		}
 	}
 
 	private createNode(config: LavalinkNodeOptions): InternalNode {
@@ -287,7 +317,9 @@ export class lavalinkExt extends BaseExtension {
 		const port = config.port ?? (secure ? 443 : 2333);
 		const identifier = config.identifier ?? `${config.host}:${port}`;
 		const protocol = secure ? "https" : "http";
-		const baseURL = `${protocol}://${config.host}:${port}/v4`;
+		const wsProtocol = secure ? "wss" : "ws";
+		const baseURL = `${protocol}://${config.host}:${port}`;
+		const wsURL = `${wsProtocol}://${config.host}:${port}/v4/websocket`;
 		const headers: Record<string, string> = {
 			Authorization: config.password,
 			"Client-Name": this.options.clientName ?? `ziplayer-extension/${this.version}`,
@@ -304,11 +336,11 @@ export class lavalinkExt extends BaseExtension {
 			secure,
 			rest,
 			connected: false,
-			connecting: false,
-			reconnectAttempts: 0,
-			// track when node was created for debug
+			wsConnected: false,
 			lastPing: undefined,
 			players: new Set<string>(),
+			wsReconnectAttempts: 0,
+			maxReconnectAttempts: 5,
 		};
 	}
 
@@ -320,162 +352,266 @@ export class lavalinkExt extends BaseExtension {
 		}
 		client.on("raw", this.handleRawEvent);
 		if (!client.listenerCount("ready")) {
-			client.once("ready", () => {
-				if (!this.userId && client.user?.id) {
-					this.userId = client.user.id;
-				}
-				this.maybeConnectNodes();
-			});
+			// client.once("ready", async () => {
+			// 	if (!this.userId && client.user?.id) {
+			// 		this.userId = client.user.id;
+			// 	}
+			// 	await this.initializeNodes().catch((error) => this.debug("Initialize nodes error", error));
+			// });
 		}
 	}
 
-	private maybeConnectNodes(): void {
-		if (this.wsReady) return;
+	private async initializeNodes(): Promise<void> {
+		console.log("Initializing nodes");
+		console.log(this.isReady, this.userId, this.client?.user?.id);
+		if (this.isReady) return;
 		if (!this.userId && !this.client?.user?.id) return;
 		if (!this.userId && this.client?.user?.id) {
 			this.userId = this.client.user.id;
 		}
 		if (!this.userId) return;
-		this.wsReady = true;
-		for (const node of this.nodes) {
-			this.connectNode(node).catch((error) => this.debug(`Failed to connect node ${node.identifier}`, error));
+		this.isReady = true;
+
+		await Promise.all(
+			this.nodes.map((node) =>
+				this.testNodeConnection(node).catch((error) => this.debug(`Failed to test node ${node.identifier}`, error)),
+			),
+		);
+	}
+
+	private async testNodeConnection(node: InternalNode): Promise<void> {
+		try {
+			const response = await node.rest.get("/version");
+			node.connected = true;
+			this.debug(`Node ${node.identifier} connected successfully`);
+
+			// Connect WebSocket to get sessionId
+			await this.connectWebSocket(node);
+		} catch (error) {
+			node.connected = false;
+			this.debug(`Node ${node.identifier} connection failed`, error);
 		}
 	}
 
-	private async connectNode(node: InternalNode): Promise<void> {
-		if (node.connecting || node.connected || node.closing) return;
-		node.connecting = true;
+	private async connectWebSocket(node: InternalNode): Promise<void> {
+		if (!this.userId) {
+			throw new Error("User ID is required for WebSocket connection");
+		}
+
 		const secure = node.secure ?? true;
 		const port = node.port ?? (secure ? 443 : 2333);
-		const protocol = secure ? "wss" : "ws";
-		const url = `${protocol}://${node.host}:${port}/v4/websocket`;
-		const headers: Record<string, string> = {
+		const wsProtocol = secure ? "wss" : "ws";
+		const wsURL = `${wsProtocol}://${node.host}:${port}/v4/websocket`;
+
+		const headers = {
 			Authorization: node.password,
+			"User-Id": this.userId,
 			"Client-Name": this.options.clientName ?? `ziplayer-extension/${this.version}`,
+			...(node.sessionId && { "Session-Id": node.sessionId }),
 		};
-		if (this.userId) headers["User-Id"] = this.userId;
-		if (node.sessionId) headers["Session-Id"] = node.sessionId;
-		const ws = new WebSocket(url, { headers });
-		node.ws = ws;
 
-		ws.on("open", () => {
-			node.connecting = false;
-			node.connected = true;
-			node.reconnectAttempts = 0;
-			this.debug(`Node ${node.identifier} websocket connected`);
-			// request stats shortly after connect to populate sorting info
-			this.debug(`Requesting initial stats for node ${node.identifier}`);
-			node.rest
-				.get(`/stats`)
-				.then((r) => {
-					node.stats = (r.data as any) ?? node.stats;
-					this.debug(`Node ${node.identifier} initial stats loaded`, node.stats);
-				})
-				.catch((err) => this.debug(`Failed to load initial stats for ${node.identifier}`, err));
-		});
+		return new Promise((resolve, reject) => {
+			const ws = new WebSocket(wsURL, { headers });
+			node.ws = ws;
 
-		ws.on("message", (data: WebSocket.RawData) => {
-			this.debug(`Node ${node.identifier} WS message received: ${String(data).slice(0, 200)}`);
-			this.handleNodeMessage(node, data.toString());
-		});
+			ws.on("open", () => {
+				this.debug(`WebSocket connected to ${node.identifier}`);
+				node.wsConnected = true;
+				node.wsReconnectAttempts = 0;
+			});
 
-		ws.on("error", (error) => {
-			this.debug(`Node ${node.identifier} websocket error`, error);
-			// attempt to surface more info when WS errors happen
-			try {
-				this.debug(`Node ${node.identifier} ws readyState=${node.ws?.readyState}`);
-			} catch (e) {
-				/* ignore */
-			}
-		});
-
-		ws.on("close", async () => {
-			this.debug(`Node ${node.identifier} websocket closed`);
-			this.debug(`Node ${node.identifier} closing state: closing=${node.closing} reconnectAttempts=${node.reconnectAttempts}`);
-			node.connected = false;
-			node.connecting = false;
-			node.ws = undefined;
-			if (node.closing) return;
-			const attempt = (node.reconnectAttempts += 1);
-			const delay = Math.min(30_000, attempt * (this.options.reconnectDelayMs ?? 5_000));
-			await wait(delay);
-			this.connectNode(node).catch((error) => this.debug(`Reconnect failed for node ${node.identifier}`, error));
-		});
-	}
-
-	private handleNodeMessage(node: InternalNode, payload: string): void {
-		let data: LavalinkSocketMessage;
-		try {
-			data = JSON.parse(payload);
-		} catch (error) {
-			this.debug(`Node ${node.identifier} sent invalid payload`, error, payload.slice(0, 200));
-			return;
-		}
-		this.debug(`Node ${node.identifier} message op=${(data as any).op}`);
-		switch (data.op) {
-			case "ready":
-				this.handleNodeReady(node, data as LavalinkReadyPayload);
-				break;
-			case "stats":
-				node.stats = (data as any).stats ?? (data as any);
-				break;
-			case "playerUpdate":
-				this.handlePlayerUpdate(node, data as LavalinkPlayerStatePayload);
-				break;
-			case "event":
-				this.handleLavalinkEvent(node, data as LavalinkEventPayload);
-				break;
-			default:
-				this.debug(`Node ${node.identifier} unknown op ${data.op}`, data);
-		}
-	}
-
-	private handleNodeReady(node: InternalNode, payload: LavalinkReadyPayload): void {
-		node.connected = true;
-		node.connecting = false;
-		this.debug(`Node ${node.identifier} ready payload(session=${payload.sessionId}) resumed=${payload.resumed}`);
-		this.configureAfterReady(node, payload)
-			.then(() => this.debug(`Node ${node.identifier} configured after ready`))
-			.catch((error) => this.debug(`Failed to configure node ${node.identifier} after ready`, error));
-		// update lastPing to note ready time
-		node.lastPing = Date.now();
-		if (!payload.resumed) {
-			for (const guildId of [...node.players]) {
-				const player = this.manager?.get(guildId);
-				if (!player) continue;
-				const state = this.playerStates.get(player);
-				if (!state) continue;
-				const current = state.track;
-				if (current) {
-					player.queue.insert(current, 0);
-					state.track = null;
-					state.playing = false;
+			ws.on("message", (data: Buffer) => {
+				try {
+					const message = JSON.parse(data.toString()) as LavalinkWebSocketMessage;
+					this.handleWebSocketMessage(node, message);
+				} catch (error) {
+					this.debug(`Failed to parse WebSocket message from ${node.identifier}`, error);
 				}
-				this.startNextOnLavalink(player).catch((error) =>
-					this.debug(`Failed to resume player ${guildId} on node ${node.identifier}`, error),
-				);
+			});
+
+			ws.on("close", (code: number, reason: Buffer) => {
+				this.debug(`WebSocket closed for ${node.identifier}: ${code} ${reason.toString()}`);
+				node.wsConnected = false;
+				node.ws = undefined;
+
+				// Auto-reconnect if not manually closed
+				if (code !== 1000 && node.wsReconnectAttempts < node.maxReconnectAttempts) {
+					node.wsReconnectAttempts++;
+					this.debug(
+						`Attempting to reconnect WebSocket for ${node.identifier} (${node.wsReconnectAttempts}/${node.maxReconnectAttempts})`,
+					);
+					setTimeout(() => {
+						this.connectWebSocket(node).catch((error) =>
+							this.debug(`WebSocket reconnection failed for ${node.identifier}`, error),
+						);
+					}, 5000 * node.wsReconnectAttempts);
+				}
+			});
+
+			ws.on("error", (error: Error) => {
+				this.debug(`WebSocket error for ${node.identifier}`, error);
+				node.wsConnected = false;
+				reject(error);
+			});
+
+			// Resolve after ready event is received
+			const originalHandleMessage = this.handleWebSocketMessage.bind(this);
+			this.handleWebSocketMessage = (node: InternalNode, message: LavalinkWebSocketMessage) => {
+				if (message.op === "ready") {
+					resolve();
+				}
+				originalHandleMessage(node, message);
+			};
+		});
+	}
+
+	private handleWebSocketMessage(node: InternalNode, message: LavalinkWebSocketMessage): void {
+		switch (message.op) {
+			case "ready": {
+				const readyMsg = message as LavalinkReadyMessage;
+				node.sessionId = readyMsg.sessionId;
+				this.debug(`Node ${node.identifier} session ready: ${readyMsg.sessionId} (resumed: ${readyMsg.resumed})`);
+				break;
+			}
+			case "stats": {
+				const statsMsg = message as LavalinkStatsMessage;
+				node.stats = {
+					players: statsMsg.players,
+					playingPlayers: statsMsg.playingPlayers,
+					uptime: statsMsg.uptime,
+					memory: statsMsg.memory,
+					cpu: statsMsg.cpu,
+					frameStats: statsMsg.frameStats,
+				};
+				this.debug(`Node ${node.identifier} stats updated`, node.stats);
+				break;
+			}
+			case "playerUpdate": {
+				const playerUpdateMsg = message as LavalinkPlayerUpdateMessage;
+				this.handlePlayerUpdate(node, playerUpdateMsg);
+				break;
+			}
+			case "event": {
+				const eventMsg = message as LavalinkEventMessage;
+				this.handleLavalinkEvent(node, eventMsg);
+				break;
+			}
+			default:
+				this.debug(`Unknown WebSocket message type: ${message.op}`);
+		}
+	}
+
+	private handlePlayerUpdate(node: InternalNode, message: LavalinkPlayerUpdateMessage): void {
+		const player = this.guildMap.get(message.guildId);
+		if (!player) return;
+
+		const state = this.playerStates.get(player);
+		if (!state) return;
+
+		// Update player state with WebSocket data
+		state.lastPosition = message.state.position;
+		// You can add more state updates here based on the WebSocket data
+	}
+
+	private handleLavalinkEvent(node: InternalNode, message: LavalinkEventMessage): void {
+		const player = this.guildMap.get(message.guildId);
+		if (!player) return;
+
+		const state = this.playerStates.get(player);
+		if (!state) return;
+
+		switch (message.type) {
+			case "TrackStartEvent":
+				// Handle track start
+				break;
+			case "TrackEndEvent":
+				// Handle track end
+				break;
+			case "TrackExceptionEvent":
+				// Handle track exception
+				break;
+			case "TrackStuckEvent":
+				// Handle track stuck
+				break;
+			case "WebSocketClosedEvent":
+				// Handle WebSocket closed
+				break;
+		}
+	}
+
+	private startUpdateLoop(): void {
+		if (this.updateTimer) return;
+		const interval = this.options.updateInterval ?? 5_000;
+		this.updateTimer = setInterval(() => {
+			this.updateAllPlayers().catch((error) => this.debug("Update loop error", error));
+		}, interval);
+	}
+
+	private stopUpdateLoop(): void {
+		if (this.updateTimer) {
+			clearInterval(this.updateTimer);
+			this.updateTimer = undefined;
+		}
+	}
+
+	private async updateAllPlayers(): Promise<void> {
+		for (const [guildId, player] of this.guildMap) {
+			const state = this.playerStates.get(player);
+			if (!state?.node?.connected || !state?.node?.wsConnected) continue;
+
+			try {
+				await this.updatePlayerState(player, state);
+			} catch (error) {
+				this.debug(`Failed to update player ${guildId}`, error);
 			}
 		}
 	}
 
-	private handlePlayerUpdate(_node: InternalNode, payload: LavalinkPlayerStatePayload): void {
-		const player = this.manager?.get(payload.guildId);
-		if (!player) return;
-		const state = this.playerStates.get(player);
-		if (!state) return;
-		state.lastPosition = payload.state?.position ?? state.lastPosition;
-		this.debug(`PlayerUpdate for guild=${payload.guildId} pos=${state.lastPosition}`);
-	}
+	private async updatePlayerState(player: Player, state: LavalinkPlayerState): Promise<void> {
+		if (!state.node || !state.node.wsConnected) return;
+		const node = state.node;
 
-	private handleLavalinkEvent(node: InternalNode, payload: LavalinkEventPayload): void {
-		const guildId = payload.guildId;
-		const player = this.manager?.get(guildId) ?? this.guildMap.get(guildId);
-		if (!player) return;
-		const state = this.playerStates.get(player);
-		if (!state) return;
-		switch (payload.type) {
-			case "TrackStartEvent": {
-				const track = this.resolveTrackFromEvent(player, payload.track);
+		try {
+			// Get player info from Lavalink
+			const response = await node.rest.get(`/v4/sessions/${node.sessionId}/players/${player.guildId}`);
+			const playerInfo = response.data as LavalinkPlayerInfo;
+
+			if (!playerInfo) {
+				// Player doesn't exist on Lavalink, clean up
+				state.playing = false;
+				state.paused = false;
+				state.track = null;
+				player.isPlaying = false;
+				player.isPaused = false;
+				return;
+			}
+
+			// Update position
+			if (playerInfo.state) {
+				state.lastPosition = playerInfo.state.position ?? 0;
+			} else if (playerInfo.track && state.track) {
+				state.lastPosition = playerInfo.track.info.position ?? 0;
+			}
+
+			// Check if track ended
+			if (!playerInfo.track && state.track && state.playing) {
+				const track = state.track;
+				player.emit("trackEnd", track);
+				state.track = null;
+				state.playing = false;
+				player.isPlaying = false;
+
+				if (!state.skipNext) {
+					this.startNextOnLavalink(player).catch((error) =>
+						this.debug(`Failed to start next track for ${player.guildId}`, error),
+					);
+				}
+				state.skipNext = false;
+			}
+
+			// Check if track started
+			if (playerInfo.track && !state.track && !state.playing) {
+				const track = this.resolveTrackFromLavalink(player, playerInfo.track);
 				if (track) {
 					state.track = track;
 					state.playing = true;
@@ -484,53 +620,31 @@ export class lavalinkExt extends BaseExtension {
 					player.isPaused = false;
 					player.emit("trackStart", track);
 				}
-				break;
 			}
-			case "TrackEndEvent": {
-				const track = this.resolveTrackFromEvent(player, payload.track) ?? state.track ?? null;
-				if (track) {
-					player.emit("trackEnd", track);
+
+			// Update pause state
+			if (state.playing && playerInfo.paused !== state.paused) {
+				state.paused = playerInfo.paused;
+				player.isPaused = playerInfo.paused;
+				if (state.track) {
+					if (playerInfo.paused) {
+						player.emit("playerPause", state.track);
+					} else {
+						player.emit("playerResume", state.track);
+					}
 				}
-				state.track = null;
-				state.playing = false;
-				player.isPlaying = false;
-				if (payload.reason === "replaced") return;
-				if (payload.reason === "stopped" && !state.skipNext) return;
-				const forced = state.skipNext;
-				state.skipNext = false;
-				this.startNextOnLavalink(player, forced).catch((error) => this.debug(`Failed to start next track for ${guildId}`, error));
-				break;
 			}
-			case "TrackExceptionEvent": {
-				const track = this.resolveTrackFromEvent(player, payload.track) ?? state.track ?? null;
-				const error = new Error(payload.exception?.message ?? "Track exception");
-				player.emit("playerError", error, track ?? undefined);
-				state.track = null;
-				state.playing = false;
-				player.isPlaying = false;
-				this.startNextOnLavalink(player).catch((err) => this.debug(`Failed to recover after exception for ${guildId}`, err));
-				break;
+		} catch (error) {
+			// Player might not exist on this node, try to find another node
+			if (error instanceof Error && error.message.includes("404")) {
+				state.node.players.delete(player.guildId);
+				state.node = undefined;
 			}
-			case "TrackStuckEvent": {
-				const track = this.resolveTrackFromEvent(player, payload.track) ?? state.track ?? null;
-				const error = new Error(`Track stuck for ${payload.thresholdMs}ms`);
-				player.emit("playerError", error, track ?? undefined);
-				state.track = null;
-				state.playing = false;
-				player.isPlaying = false;
-				this.startNextOnLavalink(player).catch((err) => this.debug(`Failed to recover after stuck track for ${guildId}`, err));
-				break;
-			}
-			case "WebSocketClosedEvent": {
-				const error = new Error(`Voice websocket closed with code ${payload.code} (${payload.reason})`);
-				player.emit("connectionError", error);
-				node.players.delete(guildId);
-				break;
-			}
+			throw error;
 		}
 	}
 
-	private resolveTrackFromEvent(player: Player, raw: LavalinkRawTrack): Track | null {
+	private resolveTrackFromLavalink(player: Player, raw: LavalinkRawTrack): Track | null {
 		if (!raw) return null;
 		const current = player.queue.currentTrack;
 		if (current && this.getEncoded(current) === raw.encoded) return current;
@@ -627,6 +741,7 @@ export class lavalinkExt extends BaseExtension {
 	};
 
 	private debug(message: string, ...optional: any[]): void {
+		if (!this.options.debug) return;
 		const formatted = `[lavalinkExt] ${message}`;
 		if (this.manager?.listenerCount("debug")) {
 			this.manager.emit("debug", formatted, ...optional);
@@ -654,6 +769,8 @@ export class lavalinkExt extends BaseExtension {
 				awaitingNode: false,
 				awaitingTrack: false,
 				voiceTimeout: null,
+				lastPosition: 0,
+				autoPlayChecked: false,
 			});
 		}
 
@@ -717,7 +834,7 @@ export class lavalinkExt extends BaseExtension {
 	async beforePlay(context: ExtensionContext, payload: ExtensionPlayRequest): Promise<ExtensionPlayResponse> {
 		const player = context.player;
 		this.attachToPlayer(player);
-		this.maybeConnectNodes();
+		await this.initializeNodes();
 
 		const requestedBy = payload.requestedBy ?? "Unknown";
 		try {
@@ -876,7 +993,7 @@ export class lavalinkExt extends BaseExtension {
 	}
 
 	private selectNode(): InternalNode | null {
-		const connected = this.nodes.filter((node) => node.connected && node.ws && node.ws.readyState === WebSocket.OPEN);
+		const connected = this.nodes.filter((node) => node.connected && node.wsConnected && node.sessionId);
 		if (connected.length === 0) return null;
 		const sortBy = this.options.nodeSort ?? "players";
 		switch (sortBy) {
@@ -912,17 +1029,13 @@ export class lavalinkExt extends BaseExtension {
 		if (!state) throw new Error("Missing player state");
 
 		let node = state.node;
-		if (!node || !node.connected || !node.ws || node.ws.readyState !== WebSocket.OPEN) {
+		if (!node || !node.connected || !node.wsConnected || !node.sessionId) {
 			const picked = this.selectNode();
 			if (!picked) throw new Error("No Lavalink nodes available");
 			node = picked;
 			state.node = node;
 			node.players.add(player.guildId);
 			this.debug(`Assigned node ${node.identifier} to guild ${player.guildId}`);
-		}
-
-		if (!node.sessionId) {
-			await this.waitForNodeReady(node);
 		}
 
 		if (state.voiceState?.sessionId && state.voiceServer?.token && state.voiceServer?.endpoint) {
@@ -934,23 +1047,12 @@ export class lavalinkExt extends BaseExtension {
 
 	private async loadTracks(node: InternalNode, identifier: string): Promise<LavalinkLoadResponse> {
 		this.debug(`Loading tracks from node ${node.identifier} identifier=${identifier}`);
-		const res = await node.rest.get<LavalinkLoadResponse>(`/loadtracks`, { params: { identifier } }).catch((error) => {
+		const res = await node.rest.get<LavalinkLoadResponse>(`/v4/loadtracks`, { params: { identifier } }).catch((error) => {
 			this.debug(`loadTracks request failed for ${node.identifier} id=${identifier}`, error);
 			throw error;
 		});
 		this.debug(`loadTracks response for ${node.identifier} id=${identifier} loadType=${res.data?.loadType}`);
 		return res.data;
-	}
-
-	private async waitForNodeReady(node: InternalNode): Promise<void> {
-		const timeout = this.options.connectTimeoutMs ?? 15_000;
-		const start = Date.now();
-		while (!node.sessionId) {
-			if (Date.now() - start >= timeout) {
-				throw new Error(`Node ${node.identifier} session not ready`);
-			}
-			await wait(200);
-		}
 	}
 
 	private async waitForVoice(player: Player): Promise<void> {
@@ -978,7 +1080,7 @@ export class lavalinkExt extends BaseExtension {
 			const timer = setTimeout(() => {
 				this.voiceWaiters.delete(guildId);
 				reject(new Error("Voice connection timed out"));
-			}, this.options.connectTimeoutMs ?? 15_000);
+			}, this.options.requestTimeoutMs ?? 15_000);
 			this.voiceWaiters.set(guildId, {
 				resolve: () => {
 					clearTimeout(timer);
@@ -1078,7 +1180,9 @@ export class lavalinkExt extends BaseExtension {
 			player.isPlaying = true;
 			player.isPaused = false;
 			await this.updatePlayer(node, player.guildId, {
-				encodedTrack: encoded,
+				track: {
+					encoded: encoded,
+				},
 				volume: player.volume ?? state.volume ?? 100,
 			});
 			return true;
@@ -1091,17 +1195,16 @@ export class lavalinkExt extends BaseExtension {
 	}
 
 	private async updatePlayer(node: InternalNode, guildId: string, payload: Record<string, any>): Promise<void> {
-		if (!node.sessionId) throw new Error("Node session not ready");
-		await node.rest.patch(`/sessions/${node.sessionId}/players/${guildId}`, payload).catch((error) => {
+		await node.rest.patch(`/v4/sessions/${node.sessionId}/players/${guildId}`, payload).catch((error) => {
 			throw error;
 		});
 	}
 
 	private async destroyLavalinkPlayer(player: Player): Promise<void> {
 		const state = this.playerStates.get(player);
-		if (!state?.node?.sessionId) return;
+		if (!state?.node) return;
 		try {
-			await state.node.rest.delete(`/sessions/${state.node.sessionId}/players/${player.guildId}`);
+			await state.node.rest.delete(`/v4/sessions/${state.node.sessionId}/players/${player.guildId}`);
 		} catch (error) {
 			this.debug(`Failed to destroy Lavalink player for ${player.guildId}`, error);
 		}
@@ -1112,20 +1215,16 @@ export class lavalinkExt extends BaseExtension {
 	}
 
 	private async sendVoiceUpdate(node: InternalNode, guildId: string, state: LavalinkPlayerState): Promise<void> {
-		if (!node.ws || node.ws.readyState !== WebSocket.OPEN) return;
 		if (!state.voiceState?.sessionId || !state.voiceServer) return;
-		const eventPayload = state.voiceServer.rawEvent ?? {
-			token: state.voiceServer.token,
-			endpoint: state.voiceServer.endpoint,
-			guild_id: state.voiceServer.guildId ?? guildId,
-		};
+
 		const payload = {
-			op: "voiceUpdate",
-			guildId,
-			sessionId: state.voiceState.sessionId,
-			event: eventPayload,
+			voice: {
+				token: state.voiceServer.token,
+				endpoint: state.voiceServer.endpoint,
+				sessionId: state.voiceState.sessionId,
+			},
 		};
-		node.ws.send(JSON.stringify(payload));
+		await node.rest.patch(`/v4/sessions/${node.sessionId}/players/${guildId}`, payload);
 	}
 
 	private pause(player: Player): boolean {
@@ -1160,7 +1259,7 @@ export class lavalinkExt extends BaseExtension {
 		player.isPlaying = false;
 		player.isPaused = false;
 		player.emit("playerStop");
-		this.updatePlayer(state.node, player.guildId, { encodedTrack: null }).catch((error) => this.debug(`Stop failed`, error));
+		this.updatePlayer(state.node, player.guildId, { track: null }).catch((error) => this.debug(`Stop failed`, error));
 		return true;
 	}
 
@@ -1168,7 +1267,7 @@ export class lavalinkExt extends BaseExtension {
 		const state = this.playerStates.get(player);
 		if (!state?.node) return false;
 		state.skipNext = true;
-		this.updatePlayer(state.node, player.guildId, { encodedTrack: null }).catch((error) => this.debug(`Skip failed`, error));
+		this.updatePlayer(state.node, player.guildId, { track: null }).catch((error) => this.debug(`Skip failed`, error));
 		return true;
 	}
 
@@ -1185,24 +1284,5 @@ export class lavalinkExt extends BaseExtension {
 		player.emit("volumeChange", old, volume);
 		this.updatePlayer(state.node, player.guildId, { volume }).catch((error) => this.debug(`Failed to set volume`, error));
 		return true;
-	}
-
-	private async resumeOnNode(node: InternalNode): Promise<void> {
-		if (!node.sessionId) return;
-		if (!this.options.resumeKey) return;
-		try {
-			await node.rest.patch(`/sessions/${node.sessionId}`, {
-				resumeKey: this.options.resumeKey,
-				timeout: this.options.resumeTimeout ?? 60,
-			});
-		} catch (error) {
-			this.debug(`Failed to configure resume key for ${node.identifier}`, error);
-		}
-	}
-
-	private async configureAfterReady(node: InternalNode, payload: LavalinkReadyPayload): Promise<void> {
-		node.sessionId = payload.sessionId;
-		node.resumed = payload.resumed;
-		await this.resumeOnNode(node);
 	}
 }
