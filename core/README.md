@@ -17,6 +17,7 @@ A modular Discord voice player with plugin system for @discordjs/voice.
 - 🔔 **Event-driven** - Rich event system for all player actions
 - 🎭 **Multi-guild support** - Manage players across multiple Discord servers
 - 🗃️ **User data** - Attach custom data to each player for later use
+- 🔌 **Lavalink** - Support manage an external Lavalink JVM node
 
 ## Installation
 
@@ -159,41 +160,32 @@ player.destroy()
 This diagram shows how custom extensions (voice, lyrics, Lavalink, etc.) integrate across the full player lifecycle and where
 their hooks are invoked.
 
-## Creating Custom Plugins
+### Lavalink Process
 
-```typescript
-import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
+Use `lavalinkExt` when you need ZiPlayer to manage an external Lavalink JVM node. The extension starts, stops, and optionally
+restarts the Lavalink jar and forwards lifecycle events through the manager/player.
 
-export class MyPlugin extends BasePlugin {
-	name = "myplugin";
-	version = "1.0.0";
+```ts
+import { PlayerManager } from "ziplayer";
+import { lavalinkExt } from "@ziplayer/extension";
 
-	canHandle(query: string): boolean {
-		return query.includes("mysite.com");
-	}
+const lavalink = new lavalinkExt(null, {
+	nodes: [
+		{
+			identifier: "locallavalink",
+			password: "youshallnotpass",
+			host: "localhost",
+			port: 2333,
+			secure: false,
+		},
+	],
+	client: client,
+	searchPrefix: "scsearch",
+});
 
-	async search(query: string, requestedBy: string): Promise<SearchResult> {
-		// Implement search logic
-		return {
-			tracks: [
-				/* ... */
-			],
-		};
-	}
-
-	async getStream(track: Track): Promise<StreamInfo> {
-		// Return audio stream
-		return { stream, type: "arbitrary" };
-	}
-}
-```
-
-## Progress Bar
-
-Display the current playback progress with `getProgressBar`:
-
-```typescript
-console.log(player.getProgressBar({ size: 30, barChar: "-", progressChar: "🔘" }));
+const manager = new PlayerManager({
+	extensions: ["lavalinkExt"],
+});
 ```
 
 ## Events

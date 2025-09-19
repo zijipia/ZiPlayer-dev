@@ -66,8 +66,13 @@ export class TrackResolver {
 		if (getEncoded(track)) return;
 		const node = nodeManager.selectNode();
 		if (!node) throw new Error("No Lavalink nodes available");
+
+		// Nếu track.url là URL thì sử dụng trực tiếp, không thêm search prefix
 		const identifier = track.url && isUrl(track.url) ? track.url : track.id || track.title;
 		if (!identifier) throw new Error("Cannot resolve track identifier for Lavalink");
+
+		this.debug(`Ensuring track encoded with identifier: ${identifier} (isUrl: ${isUrl(identifier)})`);
+
 		const response = await nodeManager.loadTracks(node, identifier);
 		const raws = Array.isArray(response.data) ? response.data : (response.data as LavalinkPlaylistData | undefined)?.tracks ?? [];
 		const raw = raws[0];
@@ -114,7 +119,12 @@ export class TrackResolver {
 	): Promise<SearchResult> {
 		const node = nodeManager.selectNode();
 		if (!node) throw new Error("No Lavalink nodes connected");
+
+		// Nếu query là URL thì sử dụng trực tiếp, không thêm search prefix
+		// Theo https://github.com/lavalink-devs/Lavalink/discussions/840
 		const identifier = isUrl(query) ? query : `${searchPrefix}:${query}`;
+		this.debug(`Searching with identifier: ${identifier} (isUrl: ${isUrl(query)})`);
+
 		const response = await nodeManager.loadTracks(node, identifier);
 
 		if (!response) throw new Error("Invalid response from Lavalink");

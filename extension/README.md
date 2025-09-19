@@ -42,11 +42,8 @@ const lavalink = new lavalinkExt(null, {
 });
 
 const manager = new PlayerManager({
-	extensions: [lavalink],
+	extensions: ["lavalinkExt"],
 });
-
-manager.on("lavalinkReady", (_player, info) => console.log("Lavalink ready", info));
-manager.on("lavalinkExit", (_player, info) => console.warn("Lavalink stopped", info));
 ```
 
 ### 3. Component Architecture

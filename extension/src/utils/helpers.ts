@@ -2,7 +2,33 @@ import type { Track } from "ziplayer";
 
 export const isTrack = (value: any): value is Track => value && typeof value === "object" && typeof value.title === "string";
 
-export const isUrl = (value: string): boolean => /^(https?:\/\/|wss?:\/\/)/i.test(value);
+export const isUrl = (value: string): boolean => {
+	// Kiểm tra URL cơ bản
+	if (!/^(https?:\/\/|wss?:\/\/)/i.test(value)) return false;
+
+	try {
+		// Kiểm tra các domain phổ biến cho music
+		const musicDomains = [
+			"youtube.com",
+			"youtu.be",
+			"m.youtube.com",
+			"soundcloud.com",
+			"m.soundcloud.com",
+			"spotify.com",
+			"open.spotify.com",
+			"bandcamp.com",
+			"music.apple.com",
+			"twitch.tv",
+			"vimeo.com",
+		];
+
+		const url = new URL(value);
+		return musicDomains.some((domain) => url.hostname === domain || url.hostname.endsWith("." + domain));
+	} catch {
+		// Nếu không parse được URL thì không phải URL hợp lệ
+		return false;
+	}
+};
 
 export const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
