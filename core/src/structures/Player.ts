@@ -243,43 +243,52 @@ export class Player extends EventEmitter {
 			if (plugin) {
 				this.debug(streamInfo);
 			}
-			if (!streamInfo || !(streamInfo as any).stream) {
+
+			// Kiểm tra nếu có stream thực sự để tạo AudioResource
+			if (streamInfo && (streamInfo as any).stream) {
+				function mapToStreamType(type: string | undefined): StreamType {
+					switch (type) {
+						case "webm/opus":
+							return StreamType.WebmOpus;
+						case "ogg/opus":
+							return StreamType.OggOpus;
+						case "arbitrary":
+						default:
+							return StreamType.Arbitrary;
+					}
+				}
+
+				const stream: Readable = (streamInfo as StreamInfo).stream;
+				const inputType = mapToStreamType((streamInfo as StreamInfo).type);
+
+				this.currentResource = createAudioResource(stream, {
+					metadata: track,
+					inputType,
+					inlineVolume: true,
+				});
+
+				// Apply initial volume using the resource's VolumeTransformer
+				if (this.volumeInterval) {
+					clearInterval(this.volumeInterval);
+					this.volumeInterval = null;
+				}
+				this.currentResource.volume?.setVolume(this.volume / 100);
+
+				this.debug(`[Player] Playing resource for track: ${track.title}`);
+				this.audioPlayer.play(this.currentResource);
+
+				await entersState(this.audioPlayer, AudioPlayerStatus.Playing, 5_000);
+				return true;
+			} else if (streamInfo && !(streamInfo as any).stream) {
+				// Extension đang xử lý phát nhạc (như Lavalink) - chỉ đánh dấu đang phát
+				this.debug(`[Player] Extension is handling playback for track: ${track.title}`);
+				this.isPlaying = true;
+				this.isPaused = false;
+				this.emit("trackStart", track);
+				return true;
+			} else {
 				throw new Error(`No stream available for track: ${track.title}`);
 			}
-
-			function mapToStreamType(type: string | undefined): StreamType {
-				switch (type) {
-					case "webm/opus":
-						return StreamType.WebmOpus;
-					case "ogg/opus":
-						return StreamType.OggOpus;
-					case "arbitrary":
-					default:
-						return StreamType.Arbitrary;
-				}
-			}
-
-			const stream: Readable = (streamInfo as StreamInfo).stream;
-			const inputType = mapToStreamType((streamInfo as StreamInfo).type);
-
-			this.currentResource = createAudioResource(stream, {
-				metadata: track,
-				inputType,
-				inlineVolume: true,
-			});
-
-			// Apply initial volume using the resource's VolumeTransformer
-			if (this.volumeInterval) {
-				clearInterval(this.volumeInterval);
-				this.volumeInterval = null;
-			}
-			this.currentResource.volume?.setVolume(this.volume / 100);
-
-			this.debug(`[Player] Playing resource for track: ${track.title}`);
-			this.audioPlayer.play(this.currentResource);
-
-			await entersState(this.audioPlayer, AudioPlayerStatus.Playing, 5_000);
-			return true;
 		} catch (error) {
 			this.debug(`[Player] startTrack error:`, error);
 			this.emit("playerError", error as Error, track);

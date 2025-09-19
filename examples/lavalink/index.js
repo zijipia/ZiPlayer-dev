@@ -25,12 +25,19 @@ const client = new Client({
 const lavalink = new lavalinkExt(null, {
 	nodes: [
 		{
-			identifier: "Fedot_Compot-main",
-			password: "https://discord.gg/bXXCZzKAyp",
-			host: "lavalink.fedotcompot.net",
-			port: 443,
-			secure: true,
+			identifier: "testlava",
+			password: "youshallnotpass",
+			host: "5.39.63.207",
+			port: 4722,
+			secure: false,
 		},
+		// {
+		// 	identifier: "Fedot_Compot-main",
+		// 	password: "https://discord.gg/bXXCZzKAyp",
+		// 	host: "lavalink.fedotcompot.net",
+		// 	port: 443,
+		// 	secure: true,
+		// },
 	],
 	client: client,
 	searchPrefix: "scsearch",
