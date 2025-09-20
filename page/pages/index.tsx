@@ -1,6 +1,9 @@
 import { Layout } from "@/components/Layout";
 import { HeroSection } from "@/components/HeroSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
+import { AdvancedFeaturesSection } from "@/components/AdvancedFeaturesSection";
+import { PluginsSection } from "@/components/PluginsSection";
+import { VoiceFeaturesSection } from "@/components/VoiceFeaturesSection";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 
 export default function Home() {
@@ -10,6 +13,9 @@ export default function Home() {
 				<AnimatedBackground />
 				<HeroSection />
 				<FeaturesSection />
+				<AdvancedFeaturesSection />
+				<PluginsSection />
+				<VoiceFeaturesSection />
 			</div>
 		</Layout>
 	);

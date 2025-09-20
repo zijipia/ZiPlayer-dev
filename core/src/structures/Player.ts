@@ -43,6 +43,53 @@ export declare interface Player {
 	emit<K extends keyof PlayerEvents>(event: K, ...args: PlayerEvents[K]): boolean;
 }
 
+/**
+ * Represents a music player for a specific Discord guild.
+ *
+ * @example
+ * // Create and configure player
+ * const player = await manager.create(guildId, {
+ *   tts: { interrupt: true, volume: 1 },
+ *   leaveOnEnd: true,
+ *   leaveTimeout: 30000
+ * });
+ *
+ * // Connect to voice channel
+ * await player.connect(voiceChannel);
+ *
+ * // Play different types of content
+ * await player.play("Never Gonna Give You Up", userId); // Search query
+ * await player.play("https://youtube.com/watch?v=dQw4w9WgXcQ", userId); // Direct URL
+ * await player.play("tts: Hello everyone!", userId); // Text-to-Speech
+ *
+ * // Player controls
+ * player.pause(); // Pause current track
+ * player.resume(); // Resume paused track
+ * player.skip(); // Skip to next track
+ * player.stop(); // Stop and clear queue
+ * player.setVolume(0.5); // Set volume to 50%
+ *
+ * // Event handling
+ * player.on("trackStart", (player, track) => {
+ *   console.log(`Now playing: ${track.title}`);
+ * });
+ *
+ * player.on("queueEnd", (player) => {
+ *   console.log("Queue finished");
+ * });
+ *
+ * @method destroy - Destroy the player
+ * @method connect - Connect to a voice channel
+ * @method play - Play a track or search query
+ * @method pause - Pause the current track
+ * @method resume - Resume the paused track
+ * @method skip - Skip to the next track
+ * @method stop - Stop playback and clear queue
+ * @method setVolume - Set the player volume
+ * @event trackStart - Emitted when a track starts playing
+ * @event trackEnd - Emitted when a track ends
+ * @event queueEnd - Emitted when the queue is empty
+ */
 export class Player extends EventEmitter {
 	public readonly guildId: string;
 	public connection: VoiceConnection | null = null;
@@ -61,6 +108,14 @@ export class Player extends EventEmitter {
 	private skipLoop = false;
 	private extensions: BaseExtension[] = [];
 	private extensionContext!: ExtensionContext;
+
+	/**
+	 * Attach an extension to the player
+	 *
+	 * @param {BaseExtension} extension - The extension to attach
+	 * @example
+	 * player.attachExtension(new MyExtension());
+	 */
 	public attachExtension(extension: BaseExtension): void {
 		if (this.extensions.includes(extension)) return;
 		if (!extension.player) extension.player = this;
@@ -68,6 +123,13 @@ export class Player extends EventEmitter {
 		this.invokeExtensionLifecycle(extension, "onRegister");
 	}
 
+	/**
+	 * Detach an extension from the player
+	 *
+	 * @param {BaseExtension} extension - The extension to detach
+	 * @example
+	 * player.detachExtension(new MyExtension());
+	 */
 	public detachExtension(extension: BaseExtension): void {
 		const index = this.extensions.indexOf(extension);
 		if (index === -1) return;
@@ -78,6 +140,14 @@ export class Player extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Get all extensions attached to the player
+	 *
+	 * @returns {readonly BaseExtension[]} All attached extensions
+	 * @example
+	 * const extensions = player.getExtensions();
+	 * console.log(`Extensions: ${extensions.length}`);
+	 */
 	public getExtensions(): readonly BaseExtension[] {
 		return this.extensions;
 	}
@@ -440,6 +510,14 @@ export class Player extends EventEmitter {
 		return this.pluginManager.unregister(name);
 	}
 
+	/**
+	 * Connect to a voice channel
+	 *
+	 * @param {VoiceChannel} channel - Discord voice channel
+	 * @returns {Promise<VoiceConnection>} The voice connection
+	 * @example
+	 * await player.connect(voiceChannel);
+	 */
 	async connect(channel: VoiceChannel): Promise<VoiceConnection> {
 		try {
 			this.debug(`[Player] Connecting to voice channel: ${channel.id}`);
@@ -475,6 +553,16 @@ export class Player extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Search for tracks using the player's extensions and plugins
+	 *
+	 * @param {string} query - The query to search for
+	 * @param {string} requestedBy - The user ID who requested the search
+	 * @returns {Promise<SearchResult>} The search result
+	 * @example
+	 * const result = await player.search("Never Gonna Give You Up", userId);
+	 * console.log(`Search result: ${result.tracks.length} tracks`);
+	 */
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		this.debug(`[Player] Search called with query: ${query}, requestedBy: ${requestedBy}`);
 		const extensionResult = await this.extensionsProvideSearch(query, requestedBy);
@@ -510,6 +598,17 @@ export class Player extends EventEmitter {
 		throw new Error(`No plugin found to handle: ${query}`);
 	}
 
+	/**
+	 * Play a track or search query
+	 *
+	 * @param {string | Track} query - Track URL, search query, or Track object
+	 * @param {string} requestedBy - User ID who requested the track
+	 * @returns {Promise<boolean>} True if playback started successfully
+	 * @example
+	 * await player.play("Never Gonna Give You Up", userId);
+	 * await player.play("https://youtube.com/watch?v=dQw4w9WgXcQ", userId);
+	 * await player.play("tts: Hello everyone!", userId);
+	 */
 	async play(query: string | Track, requestedBy?: string): Promise<boolean> {
 		this.debug(`[Player] Play called with query: ${typeof query === "string" ? query : query?.title}`);
 		this.clearLeaveTimeout();
@@ -630,6 +729,11 @@ export class Player extends EventEmitter {
 	/**
 	 * Interrupt current music with a TTS track. Pauses music, swaps the
 	 * subscription to a dedicated TTS player, plays TTS, then resumes.
+	 *
+	 * @param {Track} track - The track to interrupt with
+	 * @returns {Promise<void>}
+	 * @example
+	 * await player.interruptWithTTSTrack(track);
 	 */
 	public async interruptWithTTSTrack(track: Track): Promise<void> {
 		this.ttsQueue.push(track);
@@ -638,7 +742,13 @@ export class Player extends EventEmitter {
 		}
 	}
 
-	/** Play queued TTS items sequentially */
+	/**
+	 * Play queued TTS items sequentially
+	 *
+	 * @returns {Promise<void>}
+	 * @example
+	 * await player.playNextTTS();
+	 */
 	private async playNextTTS(): Promise<void> {
 		const next = this.ttsQueue.shift();
 		if (!next) return;
@@ -826,6 +936,14 @@ export class Player extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Pause the current track
+	 *
+	 * @returns {boolean} True if paused successfully
+	 * @example
+	 * const paused = player.pause();
+	 * console.log(`Paused: ${paused}`);
+	 */
 	pause(): boolean {
 		this.debug(`[Player] pause called`);
 		if (this.isPlaying && !this.isPaused) {
@@ -834,6 +952,14 @@ export class Player extends EventEmitter {
 		return false;
 	}
 
+	/**
+	 * Resume the current track
+	 *
+	 * @returns {boolean} True if resumed successfully
+	 * @example
+	 * const resumed = player.resume();
+	 * console.log(`Resumed: ${resumed}`);
+	 */
 	resume(): boolean {
 		this.debug(`[Player] resume called`);
 		if (this.isPaused) {
@@ -850,6 +976,14 @@ export class Player extends EventEmitter {
 		return false;
 	}
 
+	/**
+	 * Stop the current track
+	 *
+	 * @returns {boolean} True if stopped successfully
+	 * @example
+	 * const stopped = player.stop();
+	 * console.log(`Stopped: ${stopped}`);
+	 */
 	stop(): boolean {
 		this.debug(`[Player] stop called`);
 		this.queue.clear();
@@ -859,6 +993,15 @@ export class Player extends EventEmitter {
 		this.emit("playerStop");
 		return result;
 	}
+
+	/**
+	 * Skip to the next track
+	 *
+	 * @returns {boolean} True if skipped successfully
+	 * @example
+	 * const skipped = player.skip();
+	 * console.log(`Skipped: ${skipped}`);
+	 */
 
 	skip(): boolean {
 		this.debug(`[Player] skip called`);
@@ -871,6 +1014,11 @@ export class Player extends EventEmitter {
 
 	/**
 	 * Go back to the previous track in history and play it.
+	 *
+	 * @returns {Promise<boolean>} True if previous track was played successfully
+	 * @example
+	 * const previous = await player.previous();
+	 * console.log(`Previous: ${previous}`);
 	 */
 	async previous(): Promise<boolean> {
 		this.debug(`[Player] previous called`);
@@ -881,14 +1029,41 @@ export class Player extends EventEmitter {
 		return this.startTrack(track);
 	}
 
+	/**
+	 * Loop the current track
+	 *
+	 * @param {LoopMode} mode - The loop mode to set
+	 * @returns {LoopMode} The loop mode
+	 * @example
+	 * const loopMode = player.loop("track");
+	 * console.log(`Loop mode: ${loopMode}`);
+	 */
 	loop(mode?: LoopMode): LoopMode {
 		return this.queue.loop(mode);
 	}
 
+	/**
+	 * Set the auto-play mode
+	 *
+	 * @param {boolean} mode - The auto-play mode to set
+	 * @returns {boolean} The auto-play mode
+	 * @example
+	 * const autoPlayMode = player.autoPlay(true);
+	 * console.log(`Auto-play mode: ${autoPlayMode}`);
+	 */
 	autoPlay(mode?: boolean): boolean {
 		return this.queue.autoPlay(mode);
 	}
 
+	/**
+	 * Set the volume of the current track
+	 *
+	 * @param {number} volume - The volume to set
+	 * @returns {boolean} True if volume was set successfully
+	 * @example
+	 * const volumeSet = player.setVolume(50);
+	 * console.log(`Volume set: ${volumeSet}`);
+	 */
 	setVolume(volume: number): boolean {
 		this.debug(`[Player] setVolume called: ${volume}`);
 		if (volume < 0 || volume > 200) return false;
@@ -920,11 +1095,25 @@ export class Player extends EventEmitter {
 		return true;
 	}
 
+	/**
+	 * Shuffle the queue
+	 *
+	 * @returns {void}
+	 * @example
+	 * player.shuffle();
+	 */
 	shuffle(): void {
 		this.debug(`[Player] shuffle called`);
 		this.queue.shuffle();
 	}
 
+	/**
+	 * Clear the queue
+	 *
+	 * @returns {void}
+	 * @example
+	 * player.clearQueue();
+	 */
 	clearQueue(): void {
 		this.debug(`[Player] clearQueue called`);
 		this.queue.clear();
@@ -935,6 +1124,14 @@ export class Player extends EventEmitter {
 	 * - If `query` is a string, performs a search and inserts resulting tracks (playlist supported).
 	 * - If a Track or Track[] is provided, inserts directly.
 	 * Does not auto-start playback; it only modifies the queue.
+	 *
+	 * @param {string | Track | Track[]} query - The track or tracks to insert
+	 * @param {number} index - The index to insert the tracks at
+	 * @param {string} requestedBy - The user ID who requested the insert
+	 * @returns {Promise<boolean>} True if the tracks were inserted successfully
+	 * @example
+	 * const inserted = await player.insert("Song Name", 0, userId);
+	 * console.log(`Inserted: ${inserted}`);
 	 */
 	async insert(query: string | Track | Track[], index: number, requestedBy?: string): Promise<boolean> {
 		try {
@@ -976,6 +1173,15 @@ export class Player extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Remove a track from the queue
+	 *
+	 * @param {number} index - The index of the track to remove
+	 * @returns {Track | null} The removed track or null
+	 * @example
+	 * const removed = player.remove(0);
+	 * console.log(`Removed: ${removed?.title}`);
+	 */
 	remove(index: number): Track | null {
 		this.debug(`[Player] remove called for index: ${index}`);
 		const track = this.queue.remove(index);
@@ -985,6 +1191,15 @@ export class Player extends EventEmitter {
 		return track;
 	}
 
+	/**
+	 * Get the progress bar of the current track
+	 *
+	 * @param {ProgressBarOptions} options - The options for the progress bar
+	 * @returns {string} The progress bar
+	 * @example
+	 * const progressBar = player.getProgressBar();
+	 * console.log(`Progress bar: ${progressBar}`);
+	 */
 	getProgressBar(options: ProgressBarOptions = {}): string {
 		const { size = 20, barChar = "▬", progressChar = "🔘" } = options;
 		const track = this.queue.currentTrack;
@@ -1002,6 +1217,14 @@ export class Player extends EventEmitter {
 		return `${this.formatTime(current)} | ${bar} | ${this.formatTime(total)}`;
 	}
 
+	/**
+	 * Get the time of the current track
+	 *
+	 * @returns {Object} The time of the current track
+	 * @example
+	 * const time = player.getTime();
+	 * console.log(`Time: ${time.current}`);
+	 */
 	getTime() {
 		const resource = this.currentResource;
 		const track = this.queue.currentTrack;
@@ -1021,6 +1244,15 @@ export class Player extends EventEmitter {
 		};
 	}
 
+	/**
+	 * Format the time in the format of HH:MM:SS
+	 *
+	 * @param {number} ms - The time in milliseconds
+	 * @returns {string} The formatted time
+	 * @example
+	 * const formattedTime = player.formatTime(1000);
+	 * console.log(`Formatted time: ${formattedTime}`);
+	 */
 	formatTime(ms: number): string {
 		const totalSeconds = Math.floor(ms / 1000);
 		const hours = Math.floor(totalSeconds / 3600);
@@ -1047,6 +1279,13 @@ export class Player extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Destroy the player
+	 *
+	 * @returns {void}
+	 * @example
+	 * player.destroy();
+	 */
 	destroy(): void {
 		this.debug(`[Player] destroy called`);
 		if (this.leaveTimeout) {
@@ -1083,30 +1322,86 @@ export class Player extends EventEmitter {
 		this.removeAllListeners();
 	}
 
-	// Getters
+	/**
+	 * Get the size of the queue
+	 *
+	 * @returns {number} The size of the queue
+	 * @example
+	 * const queueSize = player.queueSize;
+	 * console.log(`Queue size: ${queueSize}`);
+	 */
 	get queueSize(): number {
 		return this.queue.size;
 	}
 
+	/**
+	 * Get the current track
+	 *
+	 * @returns {Track | null} The current track or null
+	 * @example
+	 * const currentTrack = player.currentTrack;
+	 * console.log(`Current track: ${currentTrack?.title}`);
+	 */
 	get currentTrack(): Track | null {
 		return this.queue.currentTrack;
 	}
 
+	/**
+	 * Get the previous track
+	 *
+	 * @returns {Track | null} The previous track or null
+	 * @example
+	 * const previousTrack = player.previousTrack;
+	 * console.log(`Previous track: ${previousTrack?.title}`);
+	 */
 	get previousTrack(): Track | null {
 		return this.queue.previousTracks?.at(-1) ?? null;
 	}
 
+	/**
+	 * Get the upcoming tracks
+	 *
+	 * @returns {Track[]} The upcoming tracks
+	 * @example
+	 * const upcomingTracks = player.upcomingTracks;
+	 * console.log(`Upcoming tracks: ${upcomingTracks.length}`);
+	 */
 	get upcomingTracks(): Track[] {
 		return this.queue.getTracks();
 	}
 
+	/**
+	 * Get the previous tracks
+	 *
+	 * @returns {Track[]} The previous tracks
+	 * @example
+	 * const previousTracks = player.previousTracks;
+	 * console.log(`Previous tracks: ${previousTracks.length}`);
+	 */
 	get previousTracks(): Track[] {
 		return this.queue.previousTracks;
 	}
 
+	/**
+	 * Get the available plugins
+	 *
+	 * @returns {string[]} The available plugins
+	 * @example
+	 * const availablePlugins = player.availablePlugins;
+	 * console.log(`Available plugins: ${availablePlugins.length}`);
+	 */
 	get availablePlugins(): string[] {
 		return this.pluginManager.getAll().map((p) => p.name);
 	}
+
+	/**
+	 * Get the related tracks
+	 *
+	 * @returns {Track[] | null} The related tracks or null
+	 * @example
+	 * const relatedTracks = player.relatedTracks;
+	 * console.log(`Related tracks: ${relatedTracks?.length}`);
+	 */
 	get relatedTracks(): Track[] | null {
 		return this.queue.relatedTracks();
 	}
