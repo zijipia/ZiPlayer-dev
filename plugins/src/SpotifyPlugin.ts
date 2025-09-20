@@ -15,7 +15,7 @@ import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
  * - This plugin only provides display metadata for Spotify content
  *
  * @example
- * ```typescript
+ * 
  * const spotifyPlugin = new SpotifyPlugin();
  *
  * // Add to PlayerManager
@@ -26,7 +26,7 @@ import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
  * // Get metadata for a Spotify track
  * const result = await spotifyPlugin.search("spotify:track:4iV5W9uYEdYUVa79Axb7Rh", "user123");
  * console.log(result.tracks[0].metadata); // Contains Spotify metadata
- * ```
+ * 
  *
  * @since 1.1.0
  */
@@ -41,11 +41,11 @@ export class SpotifyPlugin extends BasePlugin {
 	 * @returns `true` if the query is a Spotify URL/URI, `false` otherwise
 	 *
 	 * @example
-	 * ```typescript
+	 * 
 	 * plugin.canHandle("spotify:track:4iV5W9uYEdYUVa79Axb7Rh"); // true
 	 * plugin.canHandle("https://open.spotify.com/track/4iV5W9uYEdYUVa79Axb7Rh"); // true
 	 * plugin.canHandle("youtube.com/watch?v=123"); // false
-	 * ```
+	 * 
 	 */
 	canHandle(query: string): boolean {
 		const q = query.toLowerCase().trim();
@@ -65,11 +65,11 @@ export class SpotifyPlugin extends BasePlugin {
 	 * @returns `true` if the URL/URI is a valid Spotify URL/URI, `false` otherwise
 	 *
 	 * @example
-	 * ```typescript
+	 * 
 	 * plugin.validate("spotify:track:4iV5W9uYEdYUVa79Axb7Rh"); // true
 	 * plugin.validate("https://open.spotify.com/track/4iV5W9uYEdYUVa79Axb7Rh"); // true
 	 * plugin.validate("https://youtube.com/watch?v=123"); // false
-	 * ```
+	 *
 	 */
 	validate(url: string): boolean {
 		if (url.startsWith("spotify:")) return true;
@@ -93,7 +93,7 @@ export class SpotifyPlugin extends BasePlugin {
 	 * @returns A SearchResult containing a single track with metadata (no audio stream)
 	 *
 	 * @example
-	 * ```typescript
+	 * 
 	 * // Extract track metadata
 	 * const result = await plugin.search("spotify:track:4iV5W9uYEdYUVa79Axb7Rh", "user123");
 	 * console.log(result.tracks[0].metadata); // Contains Spotify metadata
@@ -101,7 +101,7 @@ export class SpotifyPlugin extends BasePlugin {
 	 * // Extract playlist metadata
 	 * const playlistResult = await plugin.search("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M", "user123");
 	 * console.log(playlistResult.tracks[0].metadata.kind); // "playlist"
-	 * ```
+	 * 
 	 */
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		if (!this.validate(query)) {
@@ -139,10 +139,10 @@ export class SpotifyPlugin extends BasePlugin {
 	 * @returns An empty array (playlist expansion not supported)
 	 *
 	 * @example
-	 * ```typescript
+	 * 
 	 * const tracks = await plugin.extractPlaylist("spotify:playlist:123", "user123");
 	 * console.log(tracks); // [] - empty array
-	 * ```
+	 * 
 	 */
 	async extractPlaylist(_input: string, _requestedBy: string): Promise<Track[]> {
 		return [];
@@ -159,10 +159,10 @@ export class SpotifyPlugin extends BasePlugin {
 	 * @returns An empty array (album expansion not supported)
 	 *
 	 * @example
-	 * ```typescript
+	 * 
 	 * const tracks = await plugin.extractAlbum("spotify:album:123", "user123");
 	 * console.log(tracks); // [] - empty array
-	 * ```
+	 * 
 	 */
 	async extractAlbum(_input: string, _requestedBy: string): Promise<Track[]> {
 		return [];
@@ -179,13 +179,13 @@ export class SpotifyPlugin extends BasePlugin {
 	 * @throws {Error} Always throws "Spotify streaming is not supported by this plugin"
 	 *
 	 * @example
-	 * ```typescript
+	 * 
 	 * try {
 	 *   const stream = await plugin.getStream(track);
 	 * } catch (error) {
 	 *   console.log(error.message); // "Spotify streaming is not supported by this plugin"
 	 * }
-	 * ```
+	 * 
 	 */
 	async getStream(_track: Track): Promise<StreamInfo> {
 		throw new Error("Spotify streaming is not supported by this plugin");

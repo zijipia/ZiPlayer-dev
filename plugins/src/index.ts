@@ -5,7 +5,6 @@
  * Each plugin provides support for different audio sources and services.
  *
  * @example
- * ```typescript
  * import { YouTubePlugin, SoundCloudPlugin, SpotifyPlugin, TTSPlugin } from "ziplayer/plugins";
  *
  * const manager = new PlayerManager({
@@ -16,7 +15,6 @@
  *     new TTSPlugin({ defaultLang: "en" })
  *   ]
  * });
- * ```
  *
  * @since 1.0.0
  */
@@ -32,10 +30,8 @@
  * - Related track recommendations
  *
  * @example
- * ```typescript
  * const youtubePlugin = new YouTubePlugin();
  * const result = await youtubePlugin.search("Never Gonna Give You Up", "user123");
- * ```
  */
 export { YouTubePlugin } from "./YouTubePlugin";
 
@@ -50,10 +46,8 @@ export { YouTubePlugin } from "./YouTubePlugin";
  * - Related track recommendations
  *
  * @example
- * ```typescript
  * const soundcloudPlugin = new SoundCloudPlugin();
  * const result = await soundcloudPlugin.search("chill music", "user123");
- * ```
  */
 export { SoundCloudPlugin } from "./SoundCloudPlugin";
 
@@ -70,10 +64,8 @@ export { SoundCloudPlugin } from "./SoundCloudPlugin";
  * - Metadata extraction using oEmbed API
  *
  * @example
- * ```typescript
  * const spotifyPlugin = new SpotifyPlugin();
  * const result = await spotifyPlugin.search("spotify:track:4iV5W9uYEdYUVa79Axb7Rh", "user123");
- * ```
  */
 export { SpotifyPlugin } from "./SpotifyPlugin";
 
@@ -88,9 +80,7 @@ export { SpotifyPlugin } from "./SpotifyPlugin";
  * - Flexible query parsing
  *
  * @example
- * ```typescript
  * const ttsPlugin = new TTSPlugin({ defaultLang: "en" });
  * const result = await ttsPlugin.search("tts:Hello world", "user123");
- * ```
  */
 export { TTSPlugin } from "./TTSPlugin";

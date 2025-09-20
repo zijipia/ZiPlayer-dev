@@ -60,7 +60,6 @@ interface TTSConfig {
  * - TTS query parsing with language and speed options
  *
  * @example
- * ```typescript
  * const ttsPlugin = new TTSPlugin({
  *   defaultLang: "en",
  *   slow: false
@@ -74,10 +73,8 @@ interface TTSConfig {
  * // Search for TTS content
  * const result = await ttsPlugin.search("tts:Hello world", "user123");
  * const stream = await ttsPlugin.getStream(result.tracks[0]);
- * ```
  *
  * @example
- * ```typescript
  * // Custom TTS provider
  * const customTTSPlugin = new TTSPlugin({
  *   defaultLang: "en",
@@ -86,7 +83,6 @@ interface TTSConfig {
  *     return customTTSProvider.synthesize(text, ctx.lang);
  *   }
  * });
- * ```
  *
  * @since 1.0.0
  */
@@ -104,7 +100,6 @@ export class TTSPlugin extends BasePlugin {
 	 * @param opts.createStream - Optional custom TTS provider function
 	 *
 	 * @example
-	 * ```typescript
 	 * // Basic TTS with Vietnamese as default
 	 * const ttsPlugin = new TTSPlugin();
 	 *
@@ -121,7 +116,6 @@ export class TTSPlugin extends BasePlugin {
 	 *     return await myCustomTTS.synthesize(text, ctx.lang);
 	 *   }
 	 * });
-	 * ```
 	 */
 	constructor(opts?: TTSPluginOptions) {
 		super();
@@ -139,11 +133,9 @@ export class TTSPlugin extends BasePlugin {
 	 * @returns `true` if the query starts with "tts:" or "say ", `false` otherwise
 	 *
 	 * @example
-	 * ```typescript
 	 * plugin.canHandle("tts:Hello world"); // true
 	 * plugin.canHandle("say Hello world"); // true
 	 * plugin.canHandle("youtube.com/watch?v=123"); // false
-	 * ```
 	 */
 	canHandle(query: string): boolean {
 		if (!query) return false;
@@ -162,7 +154,6 @@ export class TTSPlugin extends BasePlugin {
 	 * @returns A SearchResult containing a single TTS track
 	 *
 	 * @example
-	 * ```typescript
 	 * // Basic TTS
 	 * const result = await plugin.search("tts:Hello world", "user123");
 	 *
@@ -174,7 +165,6 @@ export class TTSPlugin extends BasePlugin {
 	 *
 	 * // Using "say" prefix
 	 * const result4 = await plugin.search("say Hello world", "user123");
-	 * ```
 	 */
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		if (!this.canHandle(query)) {
@@ -211,12 +201,10 @@ export class TTSPlugin extends BasePlugin {
 	 * @throws {Error} If TTS generation fails or no audio URLs are returned
 	 *
 	 * @example
-	 * ```typescript
 	 * const track = { id: "tts-123", title: "TTS: Hello world", ... };
 	 * const streamInfo = await plugin.getStream(track);
 	 * console.log(streamInfo.type); // "arbitrary"
 	 * console.log(streamInfo.stream); // Readable stream with audio
-	 * ```
 	 */
 	async getStream(track: Track): Promise<StreamInfo> {
 		const cfg = this.extractConfig(track);

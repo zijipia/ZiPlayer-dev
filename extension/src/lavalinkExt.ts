@@ -29,7 +29,6 @@ import type { LavalinkExtOptions, LavalinkPlayerState } from "./types/lavalink";
  * - Voice connection management
  *
  * @example
- * ```typescript
  * const lavalinkExt = new lavalinkExt(null, {
  *   nodes: [
  *     { host: "localhost", port: 2333, password: "youshallnotpass" }
@@ -42,7 +41,6 @@ import type { LavalinkExtOptions, LavalinkPlayerState } from "./types/lavalink";
  * const manager = new PlayerManager({
  *   extensions: [lavalinkExt]
  * });
- * ```
  *
  * @since 1.0.0
  */
@@ -97,7 +95,6 @@ export class lavalinkExt extends BaseExtension {
 	 * @throws {Error} If no nodes are provided or nodes array is empty
 	 *
 	 * @example
-	 * ```typescript
 	 * const lavalinkExt = new lavalinkExt(null, {
 	 *   nodes: [
 	 *     { host: "localhost", port: 2333, password: "youshallnotpass" },
@@ -107,7 +104,6 @@ export class lavalinkExt extends BaseExtension {
 	 *   userId: "123456789012345678",
 	 *   debug: true
 	 * });
-	 * ```
 	 */
 	constructor(player: Player | null = null, opts: LavalinkExtOptions) {
 		super();
@@ -157,13 +153,11 @@ export class lavalinkExt extends BaseExtension {
 	 * @returns `true` if activation was successful, `false` otherwise
 	 *
 	 * @example
-	 * ```typescript
 	 * const success = await lavalinkExt.active({
 	 *   manager: playerManager,
 	 *   client: discordClient,
 	 *   player: playerInstance
 	 * });
-	 * ```
 	 */
 	async active(alas: any): Promise<boolean> {
 		if (alas?.manager && !this.manager) {
@@ -190,13 +184,11 @@ export class lavalinkExt extends BaseExtension {
 	 * - Starts the player update loop for monitoring
 	 *
 	 * @param context - Extension context containing the player instance
-	 *
+	 * @returns void
 	 * @example
-	 * ```typescript
 	 * lavalinkExt.onRegister({
 	 *   player: playerInstance
 	 * });
-	 * ```
 	 */
 	onRegister(context: ExtensionContext): void {
 		this.attachToPlayer(context.player);
@@ -215,11 +207,9 @@ export class lavalinkExt extends BaseExtension {
 	 * @param context - Extension context containing the player instance
 	 *
 	 * @example
-	 * ```typescript
 	 * await lavalinkExt.onDestroy({
 	 *   player: playerInstance
 	 * });
-	 * ```
 	 */
 	async onDestroy(context: ExtensionContext): Promise<void> {
 		this.debug(`Extension destroying for guild ${context.player.guildId}`);
@@ -559,7 +549,6 @@ export class lavalinkExt extends BaseExtension {
 	 * @returns Response indicating whether the request was handled and if it was successful
 	 *
 	 * @example
-	 * ```typescript
 	 * const response = await lavalinkExt.beforePlay(context, {
 	 *   query: "Never Gonna Give You Up",
 	 *   requestedBy: "user123"
@@ -568,7 +557,6 @@ export class lavalinkExt extends BaseExtension {
 	 * if (response.handled && response.success) {
 	 *   console.log("Track started successfully on Lavalink");
 	 * }
-	 * ```
 	 */
 	async beforePlay(context: ExtensionContext, payload: ExtensionPlayRequest): Promise<ExtensionPlayResponse> {
 		const player = context.player;
@@ -652,7 +640,6 @@ export class lavalinkExt extends BaseExtension {
 	 * @returns Search result with tracks, or null if search failed
 	 *
 	 * @example
-	 * ```typescript
 	 * const result = await lavalinkExt.provideSearch(context, {
 	 *   query: "scsearch:Never Gonna Give You Up",
 	 *   requestedBy: "user123"
@@ -661,7 +648,6 @@ export class lavalinkExt extends BaseExtension {
 	 * if (result) {
 	 *   console.log(`Found ${result.tracks.length} tracks`);
 	 * }
-	 * ```
 	 */
 	async provideSearch(_context: ExtensionContext, payload: ExtensionSearchRequest): Promise<SearchResult | null> {
 		try {
@@ -691,7 +677,6 @@ export class lavalinkExt extends BaseExtension {
 	 * @returns Stream info for Lavalink playback, or null if not applicable
 	 *
 	 * @example
-	 * ```typescript
 	 * const streamInfo = await lavalinkExt.provideStream(context, {
 	 *   track: trackInstance
 	 * });
@@ -699,7 +684,6 @@ export class lavalinkExt extends BaseExtension {
 	 * if (streamInfo) {
 	 *   console.log("Stream provided by Lavalink");
 	 * }
-	 * ```
 	 */
 	async provideStream(_context: ExtensionContext, payload: ExtensionStreamRequest): Promise<StreamInfo | null> {
 		try {

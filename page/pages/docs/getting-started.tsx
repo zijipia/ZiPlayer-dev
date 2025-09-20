@@ -21,7 +21,7 @@ const manager = new PlayerManager({
   extensions: [new voiceExt(null, { lang: "vi-VN" })],
 });`;
 
-const playerCode = `const player = manager.create(guildId, {
+const playerCode = `const player = await manager.create(guildId, {
   leaveOnEnd: true,
   leaveTimeout: 30000,
   userdata: { channel: textChannel },

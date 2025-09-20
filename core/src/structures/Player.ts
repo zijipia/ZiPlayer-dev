@@ -78,17 +78,6 @@ export declare interface Player {
  *   console.log("Queue finished");
  * });
  *
- * @method destroy - Destroy the player
- * @method connect - Connect to a voice channel
- * @method play - Play a track or search query
- * @method pause - Pause the current track
- * @method resume - Resume the paused track
- * @method skip - Skip to the next track
- * @method stop - Stop playback and clear queue
- * @method setVolume - Set the player volume
- * @event trackStart - Emitted when a track starts playing
- * @event trackEnd - Emitted when a track ends
- * @event queueEnd - Emitted when the queue is empty
  */
 export class Player extends EventEmitter {
 	public readonly guildId: string;

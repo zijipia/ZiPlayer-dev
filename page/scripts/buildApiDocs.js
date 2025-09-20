@@ -24,10 +24,9 @@ class ApiDocsBuilder {
 			execSync(`node ${path.join(this.scriptsDir, "generateApiContent.js")}`, { stdio: "inherit" });
 			console.log("✅ API content generated\n");
 
-			// Bước 2: Merge với manual content
-			console.log("🔗 Step 2: Merging with manual content...");
-			this.mergeWithManualContent();
-			console.log("✅ Content merged\n");
+			// Bước 2: Skip merge (using generated content directly)
+			console.log("🔗 Step 2: Using generated content directly...");
+			console.log("✅ Content ready\n");
 
 			// Bước 3: Validate và format
 			console.log("✅ Step 3: Validating and formatting...");

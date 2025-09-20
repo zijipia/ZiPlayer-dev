@@ -1,59 +1,80 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown, Search, Code, Play, Settings, Users, Music, Mic, Headphones, MessageSquare, Layers } from "lucide-react";
+import { generatedApiContent } from "./GeneratedApiContent";
 
 const apiSections = [
 	{
 		title: "Core Classes",
 		icon: Code,
-		items: ["PlayerManager", "Player", "Queue", "Track", "SearchResult", "StreamInfo", "PlayerOptions", "PlayerEvents"],
+		items: ["playermanager", "player", "queue"],
+	},
+	{
+		title: "Core Interfaces",
+		icon: Settings,
+		items: [
+			"track",
+			"searchresult",
+			"streaminfo",
+			"playeroptions",
+			"playermanageroptions",
+			"progressbaroptions",
+			"playerevents",
+			"speechoptions",
+			"lyricsoptions",
+			"lyricsresult",
+			"ttsconfig",
+		],
+	},
+	{
+		title: "Extensions",
+		icon: Headphones,
+		items: [
+			"lavalinkext",
+			"voiceext",
+			"lyricsext",
+			"extensioncontext",
+			"extensionplayrequest",
+			"extensionplayresponse",
+			"extensionafterplaypayload",
+			"extensionstreamrequest",
+			"extensionsearchrequest",
+		],
 	},
 	{
 		title: "Plugins",
 		icon: Play,
-		items: ["BasePlugin", "YouTubePlugin", "SoundCloudPlugin", "SpotifyPlugin", "TTSPlugin", "PluginOptions"],
-	},
-	{
-		title: "Extensions",
-		icon: Settings,
-		items: ["BaseExtension", "voiceExt", "lavalinkExt", "lyricsExt", "ExtensionContext", "ExtensionOptions"],
-	},
-	{
-		title: "Managers",
-		icon: Users,
-		items: ["NodeManager", "PlayerStateManager", "WebSocketHandler", "VoiceHandler", "TrackResolver"],
-	},
-	{
-		title: "Audio",
-		icon: Music,
-		items: ["AudioPlayer", "AudioResource", "VoiceConnection", "AudioFilters", "VolumeControl"],
-	},
-	{
-		title: "Voice Features",
-		icon: Mic,
-		items: ["SpeechToText", "TextToSpeech", "VoiceCommands", "VoiceEvents", "SpeechOptions"],
-	},
-	{
-		title: "Lavalink",
-		icon: Headphones,
-		items: ["LavalinkNode", "LavalinkPlayer", "LavalinkEvents", "NodeOptions", "LoadBalancer"],
-	},
-	{
-		title: "Lyrics",
-		icon: MessageSquare,
-		items: ["LyricsProvider", "LyricsResult", "LRCFormat", "LyricsOptions", "LyricsEvents"],
-	},
-	{
-		title: "Utilities",
-		icon: Layers,
-		items: ["Helpers", "Validators", "Formatters", "Constants", "Types"],
+		items: [
+			"youtubeplugin",
+			"soundcloudplugin",
+			"spotifyplugin",
+			"ttsplugin",
+			"sourceplugin",
+			"sourceextension",
+			"ttspluginoptions",
+		],
 	},
 ];
 
-export function ApiSidebar() {
+interface ApiSidebarProps {
+	activeSection?: string;
+	onSectionChange?: (section: string) => void;
+}
+
+export function ApiSidebar({ activeSection, onSectionChange }: ApiSidebarProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [expandedSections, setExpandedSections] = useState<string[]>(["Core Classes"]);
+
+	// Auto-expand section containing active item
+	useEffect(() => {
+		if (activeSection) {
+			const sectionContainingItem = apiSections.find((section) => section.items.includes(activeSection));
+			if (sectionContainingItem && !expandedSections.includes(sectionContainingItem.title)) {
+				setExpandedSections((prev) => [...prev, sectionContainingItem.title]);
+			}
+		}
+	}, [activeSection, expandedSections]);
 
 	const toggleSection = (title: string) => {
 		setExpandedSections((prev) => (prev.includes(title) ? prev.filter((s) => s !== title) : [...prev, title]));
@@ -113,14 +134,31 @@ export function ApiSidebar() {
 						</button>
 						{expandedSections.includes(section.title) && (
 							<div className='bg-gray-800/20 backdrop-blur-sm'>
-								{section.items.map((item) => (
-									<a
-										key={item}
-										href={`#${item.toLowerCase()}`}
-										className='block px-8 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700/30 backdrop-blur-sm transition-all duration-200'>
-										{item}
-									</a>
-								))}
+								{section.items.map((item) => {
+									const apiItem = generatedApiContent[item as keyof typeof generatedApiContent];
+									const displayName = apiItem?.title || item;
+									const isActive = activeSection === item;
+									return (
+										<button
+											key={item}
+											onClick={() => {
+												if (onSectionChange) {
+													onSectionChange(item);
+												} else {
+													// Fallback to custom event
+													const event = new CustomEvent("sidebarItemClick", { detail: item });
+													window.dispatchEvent(event);
+												}
+											}}
+											className={`block w-full text-left px-8 py-2 text-sm backdrop-blur-sm transition-all duration-200 ${
+												isActive
+													? "text-white bg-blue-600/30 border-r-2 border-blue-500"
+													: "text-gray-300 hover:text-white hover:bg-gray-700/30"
+											}`}>
+											{displayName}
+										</button>
+									);
+								})}
 							</div>
 						)}
 					</div>

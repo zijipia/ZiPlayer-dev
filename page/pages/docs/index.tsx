@@ -24,7 +24,7 @@ const quickStartSteps = [
 		step: 3,
 		title: "Tạo Player",
 		description: "Tạo player cho guild và kết nối",
-		code: "const player = manager.create(guildId);",
+		code: "const player = await manager.create(guildId);",
 	},
 	{
 		step: 4,

@@ -121,6 +121,7 @@ export class PlayerManager extends EventEmitter {
 	 * @param {string | {id: string}} guildOrId - Guild ID or guild object
 	 * @param {PlayerOptions} options - Player configuration options
 	 * @returns {Promise<Player>} The created player instance
+	 *
 	 * @example
 	 * // Create player with basic options
 	 * const player = await manager.create(guildId, {

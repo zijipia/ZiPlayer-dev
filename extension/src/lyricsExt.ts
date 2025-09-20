@@ -63,8 +63,7 @@ export interface LyricsResult {
  * - Automatically cleaning and sanitizing track titles for better matching
  * - Emitting events for lyrics creation and updates
  *
- * @example
- * ```typescript
+ * @example 
  * const lyricsExt = new lyricsExt(null, {
  *   provider: "lrclib",
  *   includeSynced: true,
@@ -83,8 +82,7 @@ export interface LyricsResult {
  *
  * manager.on("lyricsChange", (player, track, lyrics) => {
  *   console.log(`Current line: ${lyrics.current}`);
- * });
- * ```
+ * }); 
  *
  * @since 1.0.0
  */
@@ -109,16 +107,14 @@ export class lyricsExt extends BaseExtension {
 	 * @param opts.sanitizeTitle - Clean track titles (default: true)
 	 * @param opts.maxLength - Maximum lyrics length (default: 32000)
 	 *
-	 * @example
-	 * ```typescript
+	 * @example	 
 	 * const lyricsExt = new lyricsExt(null, {
 	 *   provider: "lrclib",
 	 *   includeSynced: true,
 	 *   autoFetchOnTrackStart: true,
 	 *   sanitizeTitle: true,
 	 *   maxLength: 50000
-	 * });
-	 * ```
+	 * });	 
 	 */
 	constructor(player: Player | null = null, opts?: Partial<LyricsOptions>) {
 		super();
@@ -144,13 +140,11 @@ export class lyricsExt extends BaseExtension {
 	 * @param alas - Context object containing manager and player references
 	 * @returns `true` if activation was successful, `false` otherwise
 	 *
-	 * @example
-	 * ```typescript
+	 * @example	 
 	 * const success = lyricsExt.active({
 	 *   manager: playerManager,
 	 *   player: playerInstance
-	 * });
-	 * ```
+	 * });	 
 	 */
 	active(alas: any): boolean {
 		if (alas?.player && !this.player) this.player = alas.player;
@@ -233,8 +227,7 @@ export class lyricsExt extends BaseExtension {
 	 * @param override - Options to override for this specific fetch (optional)
 	 * @returns Lyrics result object, or null if no lyrics found
 	 *
-	 * @example
-	 * ```typescript
+	 * @example	 
 	 * const lyrics = await lyricsExt.fetch(track, {
 	 *   provider: "lrclib",
 	 *   includeSynced: true
@@ -245,8 +238,7 @@ export class lyricsExt extends BaseExtension {
 	 *   if (lyrics.synced) {
 	 *     console.log("Synced lyrics available!");
 	 *   }
-	 * }
-	 * ```
+	 * }	 
 	 */
 	async fetch(track?: Track, override?: Partial<LyricsOptions>): Promise<LyricsResult | null> {
 		const use: LyricsOptions = { ...this.options, ...(override || {}) } as LyricsOptions;

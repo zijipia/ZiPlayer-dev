@@ -331,6 +331,7 @@ export interface ExtensionSearchRequest {
  * Event types emitted by Player instances.
  *
  * @example
+ * 
  * player.on("willPlay", (player, track) => {
  *   console.log(`Up next: ${track.title}`);
  * });
@@ -393,6 +394,7 @@ export interface ExtensionSearchRequest {
  * player.on("queueEnd", (player) => {
  *   console.log("Queue finished");
  * });
+ * 
  */
 export interface PlayerEvents {
 	debug: [message: string, ...args: any[]];

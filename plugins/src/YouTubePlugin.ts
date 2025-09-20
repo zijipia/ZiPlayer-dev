@@ -13,7 +13,6 @@ import { Innertube, Log } from "youtubei.js";
  * - Related track recommendations
  *
  * @example
- * ```typescript
  * const youtubePlugin = new YouTubePlugin();
  *
  * // Add to PlayerManager
@@ -26,7 +25,6 @@ import { Innertube, Log } from "youtubei.js";
  *
  * // Get audio stream
  * const stream = await youtubePlugin.getStream(result.tracks[0]);
- * ```
  *
  * @since 1.0.0
  */
@@ -45,10 +43,8 @@ export class YouTubePlugin extends BasePlugin {
 	 * and search functionality. Initialization is asynchronous and handled internally.
 	 *
 	 * @example
-	 * ```typescript
 	 * const plugin = new YouTubePlugin();
 	 * // Plugin is ready to use after initialization completes
-	 * ```
 	 */
 	constructor() {
 		super();
@@ -151,11 +147,9 @@ export class YouTubePlugin extends BasePlugin {
 	 * @returns `true` if the plugin can handle the query, `false` otherwise
 	 *
 	 * @example
-	 * ```typescript
 	 * plugin.canHandle("https://www.youtube.com/watch?v=dQw4w9WgXcQ"); // true
 	 * plugin.canHandle("Never Gonna Give You Up"); // true
 	 * plugin.canHandle("spotify:track:123"); // false
-	 * ```
 	 */
 	canHandle(query: string): boolean {
 		const q = (query || "").trim().toLowerCase();
@@ -186,11 +180,9 @@ export class YouTubePlugin extends BasePlugin {
 	 * @returns `true` if the URL is a valid YouTube URL, `false` otherwise
 	 *
 	 * @example
-	 * ```typescript
 	 * plugin.validate("https://www.youtube.com/watch?v=dQw4w9WgXcQ"); // true
 	 * plugin.validate("https://youtu.be/dQw4w9WgXcQ"); // true
 	 * plugin.validate("https://spotify.com/track/123"); // false
-	 * ```
 	 */
 	validate(url: string): boolean {
 		try {
@@ -214,14 +206,12 @@ export class YouTubePlugin extends BasePlugin {
 	 * @returns A SearchResult containing tracks and optional playlist information
 	 *
 	 * @example
-	 * ```typescript
 	 * // Search by URL
 	 * const result = await plugin.search("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "user123");
 	 *
 	 * // Search by text
 	 * const searchResult = await plugin.search("Never Gonna Give You Up", "user123");
 	 * console.log(searchResult.tracks); // Array of Track objects
-	 * ```
 	 */
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		await this.ready;
@@ -297,13 +287,11 @@ export class YouTubePlugin extends BasePlugin {
 	 * @returns An array of Track objects from the playlist
 	 *
 	 * @example
-	 * ```typescript
 	 * const tracks = await plugin.extractPlaylist(
 	 *   "https://www.youtube.com/playlist?list=PLrAXtmRdnEQy6nuLMOV8uM0bMq3MUfHc1",
 	 *   "user123"
 	 * );
 	 * console.log(`Found ${tracks.length} tracks in playlist`);
-	 * ```
 	 */
 	async extractPlaylist(url: string, requestedBy: string): Promise<Track[]> {
 		await this.ready;
@@ -348,12 +336,10 @@ export class YouTubePlugin extends BasePlugin {
 	 * @throws {Error} If the track ID is invalid or stream extraction fails
 	 *
 	 * @example
-	 * ```typescript
 	 * const track = { id: "dQw4w9WgXcQ", title: "Never Gonna Give You Up", ... };
 	 * const streamInfo = await plugin.getStream(track);
 	 * console.log(streamInfo.type); // "arbitrary"
 	 * console.log(streamInfo.stream); // Readable stream
-	 * ```
 	 */
 	async getStream(track: Track): Promise<StreamInfo> {
 		await this.ready;
@@ -432,13 +418,11 @@ export class YouTubePlugin extends BasePlugin {
 	 * @returns An array of related Track objects
 	 *
 	 * @example
-	 * ```typescript
 	 * const related = await plugin.getRelatedTracks(
 	 *   "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
 	 *   { limit: 3, history: [currentTrack] }
 	 * );
 	 * console.log(`Found ${related.length} related tracks`);
-	 * ```
 	 */
 	async getRelatedTracks(trackURL: string, opts: { limit?: number; offset?: number; history?: Track[] } = {}): Promise<Track[]> {
 		await this.ready;
@@ -471,15 +455,13 @@ export class YouTubePlugin extends BasePlugin {
 	 * @returns A StreamInfo object containing the fallback audio stream
 	 * @throws {Error} If no fallback track is found or stream extraction fails
 	 *
-	 * @example
-	 * ```typescript
+	 * @example	 
 	 * try {
 	 *   const stream = await plugin.getStream(track);
 	 * } catch (error) {
 	 *   // Try fallback
 	 *   const fallbackStream = await plugin.getFallback(track);
-	 * }
-	 * ```
+	 * }	 
 	 */
 	async getFallback(track: Track): Promise<StreamInfo> {
 		try {

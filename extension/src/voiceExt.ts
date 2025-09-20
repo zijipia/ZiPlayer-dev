@@ -93,7 +93,6 @@ class PcmStream extends Transform {
  * - Filtering and processing audio quality
  *
  * @example
- * ```typescript
  * const voiceExt = new voiceExt(null, {
  *   lang: "en-US",
  *   ignoreBots: true,
@@ -110,9 +109,9 @@ class PcmStream extends Transform {
  * manager.on("voiceCreate", (player, payload) => {
  *   console.log(`${payload.userId} said: ${payload.content}`);
  * });
- * ```
  *
  * @since 1.0.0
+ * 
  */
 export class voiceExt extends BaseExtension {
 	name = "voiceExt";
@@ -143,7 +142,6 @@ export class voiceExt extends BaseExtension {
 	 * @param opts.client - Discord client instance (optional)
 	 *
 	 * @example
-	 * ```typescript
 	 * const voiceExt = new voiceExt(null, {
 	 *   lang: "en-US",
 	 *   ignoreBots: true,
@@ -151,7 +149,7 @@ export class voiceExt extends BaseExtension {
 	 *   profanityFilter: true,
 	 *   client: discordClient
 	 * });
-	 * ```
+	 * 
 	 */
 	constructor(player: Player | null = null, opts?: Partial<SpeechOptions> & { client?: any }) {
 		super();
@@ -180,13 +178,12 @@ export class voiceExt extends BaseExtension {
 	 * @returns `true` if activation was successful, `false` otherwise
 	 *
 	 * @example
-	 * ```typescript
 	 * const success = voiceExt.active({
 	 *   manager: playerManager,
 	 *   client: discordClient,
 	 *   player: playerInstance
 	 * });
-	 * ```
+	 * 
 	 */
 	active(alas: any): boolean {
 		if (alas?.player && !this.player) this.player = alas.player;
@@ -234,12 +231,11 @@ export class voiceExt extends BaseExtension {
 	 * @throws {Error} If no connected player is available
 	 *
 	 * @example
-	 * ```typescript
 	 * voiceExt.attach(discordClient, {
 	 *   lang: "en-US",
 	 *   ignoreBots: false
 	 * });
-	 * ```
+	 * 
 	 */
 	attach(client?: any, opts?: Partial<SpeechOptions>) {
 		if (client) this.client = client;
@@ -438,13 +434,12 @@ export class voiceExt extends BaseExtension {
 	 * @returns Recognized speech text, or empty string if recognition failed
 	 *
 	 * @example
-	 * ```typescript
 	 * const text = await voiceExt.resolveSpeech(audioBuffer, {
 	 *   lang: "en-US",
 	 *   profanityFilter: true
 	 * });
 	 * console.log(`Recognized: ${text}`);
-	 * ```
+	 * 
 	 */
 	public async resolveSpeech(audioBuffer: Buffer, opts?: SpeechOptions): Promise<string> {
 		const use = opts ?? this.speechOptions;
