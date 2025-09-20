@@ -9,7 +9,6 @@
 		"lint": "echo 'No lint configured'",
 		"docs:build": "node scripts/buildApiDocs.js build",
 		"docs:watch": "node scripts/buildApiDocs.js watch",
-		"docs:add-jsdoc": "node scripts/addJSDocComments.js",
 		"docs:generate": "node scripts/generateApiContent.js",
 		"test:github-actions": "node scripts/test-github-actions.js all",
 		"test:github-actions:generate": "node scripts/test-github-actions.js generate",

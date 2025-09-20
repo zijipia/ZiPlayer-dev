@@ -24,6 +24,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Verify package-lock.json exists
+        run: |
+          if [ ! -f "page/package-lock.json" ]; then
+            echo "package-lock.json not found, generating it..."
+            cd page
+            npm install
+            cd ..
+          else
+            echo "package-lock.json found"
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -39,7 +50,7 @@ jobs:
       - name: Generate API Documentation
         run: |
           cd page
-          node scripts/simple-build.js
+          node scripts/buildApiDocs.js build
 
       - name: Check for changes
         id: verify-changed-files

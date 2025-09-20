@@ -19,23 +19,18 @@ class ApiDocsBuilder {
 		console.log("🚀 Building API Documentation...\n");
 
 		try {
-			// Bước 1: Thêm JSDoc comments vào code
-			console.log("📝 Step 1: Adding JSDoc comments to code...");
-			execSync(`node ${path.join(this.scriptsDir, "addJSDocComments.js")}`, { stdio: "inherit" });
-			console.log("✅ JSDoc comments added\n");
-
-			// Bước 2: Generate API content từ code
-			console.log("🔧 Step 2: Generating API content from code...");
+			// Bước 1: Generate API content từ code (chỉ đọc JSDoc có sẵn)
+			console.log("🔧 Step 1: Generating API content from existing JSDoc...");
 			execSync(`node ${path.join(this.scriptsDir, "generateApiContent.js")}`, { stdio: "inherit" });
 			console.log("✅ API content generated\n");
 
-			// Bước 3: Merge với manual content
-			console.log("🔗 Step 3: Merging with manual content...");
+			// Bước 2: Merge với manual content
+			console.log("🔗 Step 2: Merging with manual content...");
 			this.mergeWithManualContent();
 			console.log("✅ Content merged\n");
 
-			// Bước 4: Validate và format
-			console.log("✅ Step 4: Validating and formatting...");
+			// Bước 3: Validate và format
+			console.log("✅ Step 3: Validating and formatting...");
 			this.validateAndFormat();
 			console.log("✅ Documentation built successfully!\n");
 
