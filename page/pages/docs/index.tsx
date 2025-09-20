@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Logo } from "@/components/Logo";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { BookOpen, Play, Settings, Zap, Code, Puzzle, ArrowRight, CheckCircle } from "lucide-react";
+import { BookOpen, Play, Settings, Zap, Code, Puzzle, ArrowRight, CheckCircle, List } from "lucide-react";
 
 const quickStartSteps = [
 	{
@@ -37,13 +37,20 @@ const quickStartSteps = [
 const topics = [
 	{
 		icon: Play,
+		title: "Getting Started",
+		description: "Hướng dẫn cài đặt và bắt đầu nhanh",
+		href: "/docs/getting-started",
+		color: "from-green-500 to-emerald-500",
+	},
+	{
+		icon: Settings,
 		title: "Player & Manager",
 		description: "Tìm hiểu cách sử dụng Player và PlayerManager",
 		href: "/docs/player",
 		color: "from-blue-500 to-cyan-500",
 	},
 	{
-		icon: Settings,
+		icon: List,
 		title: "Queue & Controls",
 		description: "Điều khiển queue và các tính năng phát nhạc",
 		href: "/docs/queue",
@@ -76,6 +83,13 @@ const topics = [
 		description: "Các ví dụ thực tế và best practices",
 		href: "/docs/examples",
 		color: "from-indigo-500 to-purple-500",
+	},
+	{
+		icon: Code,
+		title: "API Reference",
+		description: "Tài liệu đầy đủ về tất cả APIs",
+		href: "/api-reference",
+		color: "from-gray-500 to-slate-500",
 	},
 ];
 
