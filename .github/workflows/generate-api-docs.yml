@@ -2,13 +2,6 @@ name: Generate API Documentation
 
 on:
   push:
-    branches: [main, develop]
-    paths:
-      - "core/**"
-      - "extension/**"
-      - "plugins/**"
-      - "page/scripts/**"
-  pull_request:
     branches: [main]
     paths:
       - "core/**"
@@ -23,6 +16,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
