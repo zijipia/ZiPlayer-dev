@@ -100,85 +100,85 @@ export const generatedApiContent = {
   },
   "progressbaroptions": {
     "title": "ProgressBarOptions",
-    "description": "Timeout in milliseconds for manager-level operations (e.g. search) when running without a Player instance. /",
+    "description": "Options for the progress bar",
     "badges": [
       "interface",
       "core",
       "progressbaroptions"
     ],
-    "code": "// ProgressBarOptions usage example",
+    "code": "const options: ProgressBarOptions = {\n  size: 10,\n  barChar: \"=\",\n  progressChar: \">\"\n};\n/",
     "methods": [],
     "events": []
   },
   "extensioncontext": {
     "title": "ExtensionContext",
-    "description": "The ExtensionContext interface",
+    "description": "Context for the extension",
     "badges": [
       "interface",
       "core",
       "extensioncontext"
     ],
-    "code": "// ExtensionContext usage example",
+    "code": "const context: ExtensionContext = {\n  player: player,\n  manager: manager\n};\n/",
     "methods": [],
     "events": []
   },
   "extensionplayrequest": {
     "title": "ExtensionPlayRequest",
-    "description": "The ExtensionPlayRequest interface",
+    "description": "Request for the extension to play a track",
     "badges": [
       "interface",
       "core",
       "extensionplayrequest"
     ],
-    "code": "// ExtensionPlayRequest usage example",
+    "code": "const request: ExtensionPlayRequest = {\n  query: \"Song Name\",\n  requestedBy: \"user123\"\n};\n/",
     "methods": [],
     "events": []
   },
   "extensionplayresponse": {
     "title": "ExtensionPlayResponse",
-    "description": "The ExtensionPlayResponse interface",
+    "description": "Response for the extension to play a track",
     "badges": [
       "interface",
       "core",
       "extensionplayresponse"
     ],
-    "code": "// ExtensionPlayResponse usage example",
+    "code": "const response: ExtensionPlayResponse = {\n  handled: true,\n  query: \"Song Name\",\n  requestedBy: \"user123\"\n};\n/",
     "methods": [],
     "events": []
   },
   "extensionafterplaypayload": {
     "title": "ExtensionAfterPlayPayload",
-    "description": "The ExtensionAfterPlayPayload interface",
+    "description": "Payload for the extension to play a track",
     "badges": [
       "interface",
       "core",
       "extensionafterplaypayload"
     ],
-    "code": "// ExtensionAfterPlayPayload usage example",
+    "code": "const payload: ExtensionAfterPlayPayload = {\n  success: true,\n  query: \"Song Name\",\n  requestedBy: \"user123\"\n};\n/",
     "methods": [],
     "events": []
   },
   "extensionstreamrequest": {
     "title": "ExtensionStreamRequest",
-    "description": "The ExtensionStreamRequest interface",
+    "description": "Request for the extension to stream a track",
     "badges": [
       "interface",
       "core",
       "extensionstreamrequest"
     ],
-    "code": "// ExtensionStreamRequest usage example",
+    "code": "const request: ExtensionStreamRequest = {\n  track: track\n};\n/",
     "methods": [],
     "events": []
   },
   "extensionsearchrequest": {
     "title": "ExtensionSearchRequest",
-    "description": "The ExtensionSearchRequest interface",
+    "description": "Request for the extension to search for a track",
     "badges": [
       "interface",
       "core",
       "extensionsearchrequest"
     ],
-    "code": "// ExtensionSearchRequest usage example",
+    "code": "const request: ExtensionSearchRequest = {\n  query: \"Song Name\",\n  requestedBy: \"user123\"\n};\n/",
     "methods": [],
     "events": []
   },
@@ -196,25 +196,25 @@ export const generatedApiContent = {
   },
   "sourceplugin": {
     "title": "SourcePlugin",
-    "description": "/** Emitted when TTS finished (interruption mode) */ ttsEnd: []; } // Plugin interfaces",
+    "description": "Plugin interface",
     "badges": [
       "interface",
       "core",
       "sourceplugin"
     ],
-    "code": "// SourcePlugin usage example",
+    "code": "const plugin: SourcePlugin = {\n  name: \"YouTube\",\n  version: \"1.0.0\"\n};\n/",
     "methods": [],
     "events": []
   },
   "sourceextension": {
     "title": "SourceExtension",
-    "description": "The SourceExtension interface",
+    "description": "Extension interface",
     "badges": [
       "interface",
       "core",
       "sourceextension"
     ],
-    "code": "// SourceExtension usage example",
+    "code": "const extension: SourceExtension = {\n  name: \"YouTube\",\n  version: \"1.0.0\"\n};\n/",
     "methods": [],
     "events": []
   },
