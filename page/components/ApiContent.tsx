@@ -759,7 +759,9 @@ export function ApiContent({ activeSection: propActiveSection, onSectionChange }
 						<button
 							onClick={() => copyCode(currentContent.code)}
 							className='flex items-center gap-2 px-3 py-1 bg-gray-700/50 backdrop-blur-sm hover:bg-gray-600/50 text-white rounded transition-colors border border-gray-600/30'>
-							{copiedCode === currentContent.code ? <Check className='w-4 h-4' /> : <Copy className='w-4 h-4' />}
+							{copiedCode === currentContent.code ?
+								<Check className='w-4 h-4' />
+							:	<Copy className='w-4 h-4' />}
 							{copiedCode === currentContent.code ? "Copied!" : "Copy"}
 						</button>
 					</div>
@@ -839,7 +841,9 @@ export function ApiContent({ activeSection: propActiveSection, onSectionChange }
 										<button
 											onClick={() => copyCode(method.code)}
 											className='flex items-center gap-2 px-3 py-1 bg-gray-700/50 backdrop-blur-sm hover:bg-gray-600/50 text-white rounded transition-colors border border-gray-600/30 ml-4'>
-											{copiedCode === method.code ? <Check className='w-4 h-4' /> : <Copy className='w-4 h-4' />}
+											{copiedCode === method.code ?
+												<Check className='w-4 h-4' />
+											:	<Copy className='w-4 h-4' />}
 											<span className='text-sm'>Copy Example</span>
 										</button>
 									)}
@@ -904,9 +908,9 @@ export function ApiContent({ activeSection: propActiveSection, onSectionChange }
 								key={item}
 								onClick={() => handleSectionChange(item)}
 								className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-									activeSection === item
-										? "bg-blue-600/80 text-white border-blue-500/50"
-										: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+									activeSection === item ?
+										"bg-blue-600/80 text-white border-blue-500/50"
+									:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 								}`}>
 								{apiContent[item as keyof typeof apiContent]?.title || item}
 							</button>
@@ -935,9 +939,9 @@ export function ApiContent({ activeSection: propActiveSection, onSectionChange }
 								key={item}
 								onClick={() => handleSectionChange(item)}
 								className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-									activeSection === item
-										? "bg-green-600/80 text-white border-green-500/50"
-										: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+									activeSection === item ?
+										"bg-green-600/80 text-white border-green-500/50"
+									:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 								}`}>
 								{apiContent[item as keyof typeof apiContent]?.title || item}
 							</button>
@@ -964,9 +968,9 @@ export function ApiContent({ activeSection: propActiveSection, onSectionChange }
 								key={item}
 								onClick={() => handleSectionChange(item)}
 								className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-									activeSection === item
-										? "bg-purple-600/80 text-white border-purple-500/50"
-										: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+									activeSection === item ?
+										"bg-purple-600/80 text-white border-purple-500/50"
+									:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 								}`}>
 								{apiContent[item as keyof typeof apiContent]?.title || item}
 							</button>
@@ -991,9 +995,9 @@ export function ApiContent({ activeSection: propActiveSection, onSectionChange }
 								key={item}
 								onClick={() => handleSectionChange(item)}
 								className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-									activeSection === item
-										? "bg-red-600/80 text-white border-red-500/50"
-										: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+									activeSection === item ?
+										"bg-red-600/80 text-white border-red-500/50"
+									:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 								}`}>
 								{apiContent[item as keyof typeof apiContent]?.title || item}
 							</button>

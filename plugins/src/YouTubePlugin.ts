@@ -455,13 +455,13 @@ export class YouTubePlugin extends BasePlugin {
 	 * @returns A StreamInfo object containing the fallback audio stream
 	 * @throws {Error} If no fallback track is found or stream extraction fails
 	 *
-	 * @example	 
+	 * @example
 	 * try {
 	 *   const stream = await plugin.getStream(track);
 	 * } catch (error) {
 	 *   // Try fallback
 	 *   const fallbackStream = await plugin.getFallback(track);
-	 * }	 
+	 * }
 	 */
 	async getFallback(track: Track): Promise<StreamInfo> {
 		try {

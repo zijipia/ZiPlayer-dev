@@ -151,9 +151,9 @@ export function ApiSidebar({ activeSection, onSectionChange }: ApiSidebarProps) 
 												}
 											}}
 											className={`block w-full text-left px-8 py-2 text-sm backdrop-blur-sm transition-all duration-200 ${
-												isActive
-													? "text-white bg-blue-600/30 border-r-2 border-blue-500"
-													: "text-gray-300 hover:text-white hover:bg-gray-700/30"
+												isActive ?
+													"text-white bg-blue-600/30 border-r-2 border-blue-500"
+												:	"text-gray-300 hover:text-white hover:bg-gray-700/30"
 											}`}>
 											{displayName}
 										</button>

@@ -111,7 +111,7 @@ class PcmStream extends Transform {
  * });
  *
  * @since 1.0.0
- * 
+ *
  */
 export class voiceExt extends BaseExtension {
 	name = "voiceExt";
@@ -149,7 +149,7 @@ export class voiceExt extends BaseExtension {
 	 *   profanityFilter: true,
 	 *   client: discordClient
 	 * });
-	 * 
+	 *
 	 */
 	constructor(player: Player | null = null, opts?: Partial<SpeechOptions> & { client?: any }) {
 		super();
@@ -183,7 +183,7 @@ export class voiceExt extends BaseExtension {
 	 *   client: discordClient,
 	 *   player: playerInstance
 	 * });
-	 * 
+	 *
 	 */
 	active(alas: any): boolean {
 		if (alas?.player && !this.player) this.player = alas.player;
@@ -235,7 +235,7 @@ export class voiceExt extends BaseExtension {
 	 *   lang: "en-US",
 	 *   ignoreBots: false
 	 * });
-	 * 
+	 *
 	 */
 	attach(client?: any, opts?: Partial<SpeechOptions>) {
 		if (client) this.client = client;
@@ -439,7 +439,7 @@ export class voiceExt extends BaseExtension {
 	 *   profanityFilter: true
 	 * });
 	 * console.log(`Recognized: ${text}`);
-	 * 
+	 *
 	 */
 	public async resolveSpeech(audioBuffer: Buffer, opts?: SpeechOptions): Promise<string> {
 		const use = opts ?? this.speechOptions;
