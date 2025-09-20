@@ -281,7 +281,7 @@ export class lyricsExt extends BaseExtension {
 			if (primary) {
 				// Trim if needed
 				const cut = (s?: string | null) =>
-					use.maxLength && s && s.length > use.maxLength ? s.slice(0, use.maxLength) : s ?? null;
+					use.maxLength && s && s.length > use.maxLength ? s.slice(0, use.maxLength) : (s ?? null);
 
 				const result: LyricsResult = {
 					provider: "lrclib",
@@ -307,7 +307,7 @@ export class lyricsExt extends BaseExtension {
 			const text = await this.queryLyricsOVH({ artist, title });
 			if (text) {
 				const cut = (s?: string | null) =>
-					use.maxLength && s && s.length > use.maxLength ? s.slice(0, use.maxLength) : s ?? null;
+					use.maxLength && s && s.length > use.maxLength ? s.slice(0, use.maxLength) : (s ?? null);
 				return {
 					provider: "lyricsovh",
 					source: "Lyrics.ovh",
