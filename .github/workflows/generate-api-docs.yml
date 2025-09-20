@@ -44,13 +44,13 @@ jobs:
       - name: Check for changes
         id: verify-changed-files
         run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Files have been modified"
-            git status
-          else
+          git add page/components/GeneratedApiContent.ts
+          if git diff --cached --quiet; then
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "No files were modified"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Files have been modified"
           fi
 
       - name: Commit changes
@@ -58,21 +58,19 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add page/components/GeneratedApiContent.ts
           git commit -m "🤖 Auto-generate API documentation [skip ci]"
 
       - name: Push changes
         if: steps.verify-changed-files.outputs.changed == 'true'
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.ACTIONS_TOKEN }}
-          branch: ${{ github.ref_name }}
+        run: git push origin HEAD:${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACTIONS_TOKEN  }}
 
       - name: Create Pull Request
         if: github.event_name == 'push' && steps.verify-changed-files.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.ACTIONS_TOKEN }}
+          token: ${{ secrets.ACTIONS_TOKEN  }}
           commit-message: "🤖 Auto-generate API documentation"
           title: "🤖 Auto-generated API Documentation Update"
           body: |
