@@ -17,6 +17,35 @@ import { VoiceHandler } from "./handlers/VoiceHandler";
 import { getEncoded, isTrack, createDebugLogger } from "./utils/helpers";
 import type { LavalinkExtOptions, LavalinkPlayerState } from "./types/lavalink";
 
+/**
+ * Lavalink extension for ZiPlayer that provides high-performance audio streaming.
+ *
+ * This extension integrates with Lavalink nodes to provide:
+ * - High-quality audio streaming with low latency
+ * - Advanced audio processing and effects
+ * - Load balancing across multiple Lavalink nodes
+ * - WebSocket-based real-time player updates
+ * - Automatic failover and reconnection
+ * - Voice connection management
+ *
+ * @example
+ * ```typescript
+ * const lavalinkExt = new lavalinkExt(null, {
+ *   nodes: [
+ *     { host: "localhost", port: 2333, password: "youshallnotpass" }
+ *   ],
+ *   clientName: "MyBot",
+ *   userId: "123456789"
+ * });
+ *
+ * // Add to PlayerManager
+ * const manager = new PlayerManager({
+ *   extensions: [lavalinkExt]
+ * });
+ * ```
+ *
+ * @since 1.0.0
+ */
 export class lavalinkExt extends BaseExtension {
 	name = "lavalinkExt";
 	version = "1.0.0";
@@ -49,6 +78,37 @@ export class lavalinkExt extends BaseExtension {
 	private updateTimer?: NodeJS.Timeout;
 	private debug: (message: string, ...optional: any[]) => void;
 
+	/**
+	 * Creates a new Lavalink extension instance.
+	 *
+	 * @param player - The player instance to attach to (optional, can be set later)
+	 * @param opts - Configuration options for the Lavalink extension
+	 * @param opts.nodes - Array of Lavalink node configurations
+	 * @param opts.clientName - Name to identify this client to Lavalink nodes
+	 * @param opts.userId - Discord user ID of the bot
+	 * @param opts.client - Discord.js client instance
+	 * @param opts.searchPrefix - Prefix for search queries (default: "scsearch")
+	 * @param opts.nodeSort - Node selection strategy (default: "players")
+	 * @param opts.requestTimeoutMs - Request timeout in milliseconds (default: 10000)
+	 * @param opts.updateInterval - Player update interval in milliseconds (default: 5000)
+	 * @param opts.debug - Enable debug logging (default: false)
+	 * @param opts.sendGatewayPayload - Function to send gateway payloads (optional)
+	 *
+	 * @throws {Error} If no nodes are provided or nodes array is empty
+	 *
+	 * @example
+	 * ```typescript
+	 * const lavalinkExt = new lavalinkExt(null, {
+	 *   nodes: [
+	 *     { host: "localhost", port: 2333, password: "youshallnotpass" },
+	 *     { host: "backup.example.com", port: 443, password: "backup", secure: true }
+	 *   ],
+	 *   clientName: "MyMusicBot",
+	 *   userId: "123456789012345678",
+	 *   debug: true
+	 * });
+	 * ```
+	 */
 	constructor(player: Player | null = null, opts: LavalinkExtOptions) {
 		super();
 		if (!opts || !Array.isArray(opts.nodes) || opts.nodes.length === 0) {
@@ -84,6 +144,27 @@ export class lavalinkExt extends BaseExtension {
 		}
 	}
 
+	/**
+	 * Activates the extension with the provided context.
+	 *
+	 * This method is called when the extension is activated and handles:
+	 * - Setting up the player manager reference
+	 * - Binding the Discord client for voice events
+	 * - Attaching to the player instance
+	 * - Initializing Lavalink node connections
+	 *
+	 * @param alas - Context object containing manager, client, and player references
+	 * @returns `true` if activation was successful, `false` otherwise
+	 *
+	 * @example
+	 * ```typescript
+	 * const success = await lavalinkExt.active({
+	 *   manager: playerManager,
+	 *   client: discordClient,
+	 *   player: playerInstance
+	 * });
+	 * ```
+	 */
 	async active(alas: any): Promise<boolean> {
 		if (alas?.manager && !this.manager) {
 			this.manager = alas.manager as PlayerManager;
@@ -101,11 +182,45 @@ export class lavalinkExt extends BaseExtension {
 		return true;
 	}
 
+	/**
+	 * Called when the extension is registered with a player.
+	 *
+	 * This method handles the initial setup when the extension is registered:
+	 * - Attaches to the player instance
+	 * - Starts the player update loop for monitoring
+	 *
+	 * @param context - Extension context containing the player instance
+	 *
+	 * @example
+	 * ```typescript
+	 * lavalinkExt.onRegister({
+	 *   player: playerInstance
+	 * });
+	 * ```
+	 */
 	onRegister(context: ExtensionContext): void {
 		this.attachToPlayer(context.player);
 		this.startUpdateLoop();
 	}
 
+	/**
+	 * Called when the extension is being destroyed.
+	 *
+	 * This method handles cleanup when the extension is destroyed:
+	 * - Stops the update loop
+	 * - Gracefully destroys all Lavalink players
+	 * - Detaches from the current player
+	 * - Closes all node connections
+	 *
+	 * @param context - Extension context containing the player instance
+	 *
+	 * @example
+	 * ```typescript
+	 * await lavalinkExt.onDestroy({
+	 *   player: playerInstance
+	 * });
+	 * ```
+	 */
 	async onDestroy(context: ExtensionContext): Promise<void> {
 		this.debug(`Extension destroying for guild ${context.player.guildId}`);
 
@@ -430,6 +545,31 @@ export class lavalinkExt extends BaseExtension {
 		this.playerStateManager.detachPlayer(player);
 	}
 
+	/**
+	 * Handles play requests before they are processed by the player.
+	 *
+	 * This method intercepts play requests and attempts to handle them with Lavalink:
+	 * - Resolves tracks using the track resolver
+	 * - Adds tracks to the player's queue
+	 * - Attempts to start playback on Lavalink if possible
+	 * - Falls back to plugin handling if Lavalink cannot process the track
+	 *
+	 * @param context - Extension context containing the player instance
+	 * @param payload - Play request payload containing query and metadata
+	 * @returns Response indicating whether the request was handled and if it was successful
+	 *
+	 * @example
+	 * ```typescript
+	 * const response = await lavalinkExt.beforePlay(context, {
+	 *   query: "Never Gonna Give You Up",
+	 *   requestedBy: "user123"
+	 * });
+	 *
+	 * if (response.handled && response.success) {
+	 *   console.log("Track started successfully on Lavalink");
+	 * }
+	 * ```
+	 */
 	async beforePlay(context: ExtensionContext, payload: ExtensionPlayRequest): Promise<ExtensionPlayResponse> {
 		const player = context.player;
 		this.attachToPlayer(player);
@@ -499,6 +639,30 @@ export class lavalinkExt extends BaseExtension {
 		}
 	}
 
+	/**
+	 * Provides search functionality for Lavalink-compatible sources.
+	 *
+	 * This method handles search requests by querying Lavalink nodes:
+	 * - Uses the track resolver to search Lavalink sources
+	 * - Supports various search prefixes and query types
+	 * - Returns search results with track information
+	 *
+	 * @param _context - Extension context (unused in this implementation)
+	 * @param payload - Search request payload containing query and metadata
+	 * @returns Search result with tracks, or null if search failed
+	 *
+	 * @example
+	 * ```typescript
+	 * const result = await lavalinkExt.provideSearch(context, {
+	 *   query: "scsearch:Never Gonna Give You Up",
+	 *   requestedBy: "user123"
+	 * });
+	 *
+	 * if (result) {
+	 *   console.log(`Found ${result.tracks.length} tracks`);
+	 * }
+	 * ```
+	 */
 	async provideSearch(_context: ExtensionContext, payload: ExtensionSearchRequest): Promise<SearchResult | null> {
 		try {
 			return await this.trackResolver.searchLavalink(
@@ -513,6 +677,30 @@ export class lavalinkExt extends BaseExtension {
 		}
 	}
 
+	/**
+	 * Provides stream information for Lavalink tracks.
+	 *
+	 * This method handles stream requests for tracks that are being played on Lavalink:
+	 * - Checks if the track is currently playing on Lavalink
+	 * - Verifies the track matches the requested track
+	 * - Ensures the node connection is active
+	 * - Returns stream metadata for Lavalink playback
+	 *
+	 * @param _context - Extension context containing the player instance
+	 * @param payload - Stream request payload containing the track
+	 * @returns Stream info for Lavalink playback, or null if not applicable
+	 *
+	 * @example
+	 * ```typescript
+	 * const streamInfo = await lavalinkExt.provideStream(context, {
+	 *   track: trackInstance
+	 * });
+	 *
+	 * if (streamInfo) {
+	 *   console.log("Stream provided by Lavalink");
+	 * }
+	 * ```
+	 */
 	async provideStream(_context: ExtensionContext, payload: ExtensionStreamRequest): Promise<StreamInfo | null> {
 		try {
 			const track = payload.track;

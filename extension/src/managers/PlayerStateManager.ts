@@ -1,12 +1,49 @@
 import type { Player } from "ziplayer";
 import type { LavalinkPlayerState, InternalNode, VoiceServerRawEvent, VoiceServerState } from "../types/lavalink";
 
+/**
+ * Manages player states and voice connection handling for Lavalink players.
+ *
+ * This class handles:
+ * - Player state tracking and synchronization
+ * - Voice connection state management
+ * - Voice server and state update handling
+ * - Player-to-node mapping and assignment
+ * - Voice connection timeout and error handling
+ *
+ * @example
+ * ```typescript
+ * const stateManager = new PlayerStateManager(true); // debug enabled
+ *
+ * // Attach a player
+ * stateManager.attachPlayer(player);
+ *
+ * // Handle voice updates
+ * stateManager.handleVoiceServerUpdate(guildId, voiceServerData);
+ * stateManager.handleVoiceStateUpdate(guildId, voiceStateData, userId);
+ *
+ * // Wait for voice connection
+ * await stateManager.waitForVoice(player, 15000);
+ * ```
+ *
+ * @since 1.0.0
+ */
 export class PlayerStateManager {
 	private playerStates = new WeakMap<Player, LavalinkPlayerState>();
 	private guildMap = new Map<string, Player>();
 	private voiceWaiters = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
 	private debug: (message: string, ...optional: any[]) => void;
 
+	/**
+	 * Creates a new PlayerStateManager instance.
+	 *
+	 * @param debug - Whether to enable debug logging
+	 *
+	 * @example
+	 * ```typescript
+	 * const stateManager = new PlayerStateManager(true);
+	 * ```
+	 */
 	constructor(debug: boolean) {
 		this.debug = (message: string, ...optional: any[]) => {
 			if (!debug) return;
@@ -15,6 +52,21 @@ export class PlayerStateManager {
 		};
 	}
 
+	/**
+	 * Attaches a player to the state manager.
+	 *
+	 * This method initializes the player state and sets up tracking:
+	 * - Creates a new state object for the player
+	 * - Maps the guild ID to the player for quick lookup
+	 * - Initializes default state values
+	 *
+	 * @param player - The player instance to attach
+	 *
+	 * @example
+	 * ```typescript
+	 * stateManager.attachPlayer(player);
+	 * ```
+	 */
 	attachPlayer(player: Player): void {
 		if (!player) return;
 		this.guildMap.set(player.guildId, player);
@@ -35,6 +87,22 @@ export class PlayerStateManager {
 		}
 	}
 
+	/**
+	 * Detaches a player from the state manager.
+	 *
+	 * This method cleans up the player state and removes tracking:
+	 * - Removes the player from the guild mapping
+	 * - Cleans up voice waiters for the guild
+	 * - Removes the player state from tracking
+	 * - Removes the player from the assigned node
+	 *
+	 * @param player - The player instance to detach
+	 *
+	 * @example
+	 * ```typescript
+	 * stateManager.detachPlayer(player);
+	 * ```
+	 */
 	detachPlayer(player: Player): void {
 		const state = this.playerStates.get(player);
 		if (state?.node) {
@@ -63,6 +131,26 @@ export class PlayerStateManager {
 		return this.guildMap.get(guildId);
 	}
 
+	/**
+	 * Handles voice server update events from Discord.
+	 *
+	 * This method processes voice server updates that contain:
+	 * - Voice server token for authentication
+	 * - Voice server endpoint for connection
+	 * - Guild ID for identification
+	 *
+	 * @param guildId - Discord guild ID
+	 * @param data - Voice server update data from Discord
+	 *
+	 * @example
+	 * ```typescript
+	 * stateManager.handleVoiceServerUpdate("123456789", {
+	 *   token: "voice_token",
+	 *   endpoint: "voice.example.com",
+	 *   guild_id: "123456789"
+	 * });
+	 * ```
+	 */
 	handleVoiceServerUpdate(guildId: string, data: any): void {
 		const player = this.guildMap.get(guildId);
 		if (!player) return;
@@ -92,6 +180,27 @@ export class PlayerStateManager {
 		this.debug(`VOICE_SERVER_UPDATE for guild ${guildId}`);
 	}
 
+	/**
+	 * Handles voice state update events from Discord.
+	 *
+	 * This method processes voice state updates that contain:
+	 * - Session ID for voice connection
+	 * - Channel ID for voice channel
+	 * - User ID for verification
+	 *
+	 * @param guildId - Discord guild ID
+	 * @param data - Voice state update data from Discord
+	 * @param userId - Discord user ID to verify against
+	 *
+	 * @example
+	 * ```typescript
+	 * stateManager.handleVoiceStateUpdate("123456789", {
+	 *   session_id: "session_123",
+	 *   channel_id: "456789012",
+	 *   user_id: "789012345"
+	 * }, "789012345");
+	 * ```
+	 */
 	handleVoiceStateUpdate(guildId: string, data: any, userId: string): void {
 		const player = this.guildMap.get(guildId);
 		if (!player) return;
@@ -117,6 +226,26 @@ export class PlayerStateManager {
 		}
 	}
 
+	/**
+	 * Waits for voice connection to be established for a player.
+	 *
+	 * This method waits until both voice server and voice state updates
+	 * have been received, indicating the voice connection is ready.
+	 *
+	 * @param player - The player to wait for voice connection
+	 * @param timeoutMs - Timeout in milliseconds (default: 15000)
+	 * @returns Promise that resolves when voice is ready or rejects on timeout
+	 *
+	 * @example
+	 * ```typescript
+	 * try {
+	 *   await stateManager.waitForVoice(player, 10000);
+	 *   console.log("Voice connection ready!");
+	 * } catch (error) {
+	 *   console.log("Voice connection timed out");
+	 * }
+	 * ```
+	 */
 	waitForVoice(player: Player, timeoutMs: number = 15000): Promise<void> {
 		const state = this.playerStates.get(player);
 		if (!state) return Promise.resolve();
