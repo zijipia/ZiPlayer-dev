@@ -39,7 +39,21 @@ jobs:
       - name: Generate API Documentation
         run: |
           cd page
+          echo "🔧 Installing dependencies..."
+          npm install
+          echo "📚 Generating API documentation..."
           node scripts/buildApiDocs.js build
+          echo "✅ API documentation generated"
+
+      - name: Debug - Check generated files
+        run: |
+          echo "📁 Checking generated files..."
+          ls -la page/components/GeneratedApiContent.ts || echo "GeneratedApiContent.ts not found"
+          if [ -f "page/components/GeneratedApiContent.ts" ]; then
+            echo "📄 File size: $(wc -c < page/components/GeneratedApiContent.ts) bytes"
+            echo "📄 First 10 lines:"
+            head -10 page/components/GeneratedApiContent.ts
+          fi
 
       - name: Check for changes
         id: verify-changed-files
@@ -51,6 +65,7 @@ jobs:
           else
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "Files have been modified"
+            git diff --cached --name-only
           fi
 
       - name: Commit changes
@@ -64,13 +79,13 @@ jobs:
         if: steps.verify-changed-files.outputs.changed == 'true'
         run: git push origin HEAD:${{ github.ref_name }}
         env:
-          GITHUB_TOKEN: ${{ secrets.ACTIONS_TOKEN  }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Pull Request
         if: github.event_name == 'push' && steps.verify-changed-files.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.ACTIONS_TOKEN  }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "🤖 Auto-generate API documentation"
           title: "🤖 Auto-generated API Documentation Update"
           body: |
