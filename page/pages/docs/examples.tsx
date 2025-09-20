@@ -35,7 +35,7 @@ client.on("messageCreate", async (message) => {
   
   if (message.content.startsWith("!play")) {
     const query = message.content.slice(6);
-    const player = manager.create(message.guild.id);
+    const player = await manager.create(message.guild.id);
     
     try {
       await player.connect(message.member.voice.channel);
@@ -102,7 +102,7 @@ client.on("ready", async () => {
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   
-  const player = manager.create(interaction.guild.id);
+  const player = await manager.create(interaction.guild.id);
   
   switch (interaction.commandName) {
     case "play":

@@ -22,7 +22,7 @@ const manager = new PlayerManager({
   leaveOnEmptyCooldown: 30000,
 });`;
 
-const createPlayerCode = `const player = manager.create(guildId, {
+const createPlayerCode = `const player = await manager.create(guildId, {
   // Cấu hình player
   leaveOnEnd: true,
   leaveTimeout: 30000,

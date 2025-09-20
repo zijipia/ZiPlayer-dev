@@ -47,7 +47,7 @@ const manager = new PlayerManager({
   ]
 });
 
-const player = manager.create(message.guild.id, {
+const player = await manager.create(message.guild.id, {
 	userdata: {
 		channel: message.channel,
 	},
