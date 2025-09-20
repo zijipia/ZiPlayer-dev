@@ -1,0 +1,139 @@
+name: Validate API Documentation
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "page/components/GeneratedApiContent.ts"
+      - "page/components/ApiContent.tsx"
+
+jobs:
+  validate-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: page/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd page
+          npm ci
+
+      - name: Validate API Documentation
+        run: |
+          cd page
+          echo "🔍 Validating API documentation..."
+
+          # Check if GeneratedApiContent.ts exists
+          if [ ! -f "components/GeneratedApiContent.ts" ]; then
+            echo "❌ GeneratedApiContent.ts not found"
+            exit 1
+          fi
+
+          # Validate JSON structure
+          node -e "
+            const fs = require('fs');
+            const content = fs.readFileSync('components/GeneratedApiContent.ts', 'utf8');
+            const match = content.match(/export const generatedApiContent = ({[\s\S]*});/);
+            
+            if (!match) {
+              console.error('❌ Could not parse generatedApiContent');
+              process.exit(1);
+            }
+            
+            try {
+              const apiContent = JSON.parse(match[1]);
+              console.log('✅ JSON structure is valid');
+              
+              // Validate required fields
+              const requiredFields = ['title', 'description', 'badges', 'code'];
+              let isValid = true;
+              
+              for (const [key, value] of Object.entries(apiContent)) {
+                if (typeof value !== 'object' || value === null) {
+                  console.error(\`❌ Invalid content for \${key}: not an object\`);
+                  isValid = false;
+                  continue;
+                }
+                
+                for (const field of requiredFields) {
+                  if (!(field in value)) {
+                    console.error(\`❌ Missing required field '\${field}' in \${key}\`);
+                    isValid = false;
+                  }
+                }
+              }
+              
+              if (isValid) {
+                console.log('✅ All API content validation passed');
+                console.log(\`📊 Found \${Object.keys(apiContent).length} API items\`);
+              } else {
+                console.error('❌ API content validation failed');
+                process.exit(1);
+              }
+            } catch (error) {
+              console.error('❌ JSON parse error:', error.message);
+              process.exit(1);
+            }
+          "
+
+      - name: Test Documentation Generation
+        run: |
+          cd page
+          echo "🧪 Testing documentation generation..."
+
+          # Test if scripts can run without errors
+          npm run docs:generate
+
+          # Check if new content was generated
+          if [ -f "components/GeneratedApiContent.ts" ]; then
+            echo "✅ Documentation generation test passed"
+          else
+            echo "❌ Documentation generation test failed"
+            exit 1
+          fi
+
+      - name: Check for JSDoc comments
+        run: |
+          echo "📝 Checking for JSDoc comments in source files..."
+
+          # Check core files
+          for file in core/src/structures/*.ts core/src/types/*.ts; do
+            if [ -f "$file" ]; then
+              if grep -q "/\*\*" "$file" && grep -q "@example" "$file"; then
+                echo "✅ $file has JSDoc comments"
+              else
+                echo "⚠️  $file missing JSDoc comments"
+              fi
+            fi
+          done
+
+          # Check extension files
+          for file in extension/src/*.ts; do
+            if [ -f "$file" ]; then
+              if grep -q "/\*\*" "$file" && grep -q "@example" "$file"; then
+                echo "✅ $file has JSDoc comments"
+              else
+                echo "⚠️  $file missing JSDoc comments"
+              fi
+            fi
+          done
+
+          # Check plugin files
+          for file in plugins/src/*.ts; do
+            if [ -f "$file" ]; then
+              if grep -q "/\*\*" "$file" && grep -q "@example" "$file"; then
+                echo "✅ $file has JSDoc comments"
+              else
+                echo "⚠️  $file missing JSDoc comments"
+              fi
+            fi
+          done

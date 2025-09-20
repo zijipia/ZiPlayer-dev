@@ -74,6 +74,17 @@ export class TrackResolver {
 		this.debug(`Ensuring track encoded with identifier: ${identifier} (isUrl: ${isUrl(identifier)})`);
 
 		const response = await nodeManager.loadTracks(node, identifier);
+
+		// Kiểm tra response type
+		if (response.loadType === "error") {
+			const errorData = response.data as { message?: string; severity?: string } | null;
+			throw new Error(errorData?.message ?? "Lavalink error");
+		}
+
+		if (response.loadType === "empty") {
+			throw new Error("Track not found on Lavalink");
+		}
+
 		const raws = Array.isArray(response.data) ? response.data : (response.data as LavalinkPlaylistData | undefined)?.tracks ?? [];
 		const raw = raws[0];
 		if (!raw) throw new Error("Track not found on Lavalink");

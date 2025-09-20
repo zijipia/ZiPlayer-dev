@@ -1,0 +1,94 @@
+name: Generate API Documentation
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "core/**"
+      - "extension/**"
+      - "plugins/**"
+      - "page/scripts/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "core/**"
+      - "extension/**"
+      - "plugins/**"
+      - "page/scripts/**"
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: page/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd page
+          npm ci
+
+      - name: Generate API Documentation
+        run: |
+          cd page
+          node scripts/simple-build.js
+
+      - name: Check for changes
+        id: verify-changed-files
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Files have been modified"
+            git status
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No files were modified"
+          fi
+
+      - name: Commit changes
+        if: steps.verify-changed-files.outputs.changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add page/components/GeneratedApiContent.ts
+          git commit -m "🤖 Auto-generate API documentation [skip ci]"
+
+      - name: Push changes
+        if: steps.verify-changed-files.outputs.changed == 'true'
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.ACTIONS_TOKEN }}
+          branch: ${{ github.ref_name }}
+
+      - name: Create Pull Request
+        if: github.event_name == 'push' && steps.verify-changed-files.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.ACTIONS_TOKEN }}
+          commit-message: "🤖 Auto-generate API documentation"
+          title: "🤖 Auto-generated API Documentation Update"
+          body: |
+            ## 📚 API Documentation Update
+
+            This PR contains automatically generated API documentation updates based on recent code changes.
+
+            ### Changes Made:
+            - Updated `GeneratedApiContent.ts` with latest API information
+            - Generated from JSDoc comments in the codebase
+            - Includes methods, events, and examples
+
+            ### Files Modified:
+            - `page/components/GeneratedApiContent.ts`
+
+            ---
+            *This PR was automatically created by the GitHub Action workflow.*
+          branch: auto-generate-api-docs
+          delete-branch: true

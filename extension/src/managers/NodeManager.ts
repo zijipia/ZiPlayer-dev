@@ -129,9 +129,14 @@ export class NodeManager {
 		try {
 			await node.rest.patch(`/v4/sessions/${node.sessionId}/players/${guildId}`, payload);
 		} catch (error: any) {
-			// Don't throw if the connection is already closed or player doesn't exist
-			if (error.response?.status === 404 || error.code === "ECONNRESET" || error.code === "ECONNREFUSED") {
-				this.debug(`Player ${guildId} not found or connection closed, skipping update`);
+			// Don't throw if the connection is already closed, player doesn't exist, or bad request
+			if (
+				error.response?.status === 404 ||
+				error.response?.status === 400 ||
+				error.code === "ECONNRESET" ||
+				error.code === "ECONNREFUSED"
+			) {
+				this.debug(`Player ${guildId} not found, bad request, or connection closed, skipping update`);
 				return;
 			}
 			throw error;

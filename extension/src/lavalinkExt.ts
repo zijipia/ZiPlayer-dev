@@ -255,7 +255,12 @@ export class lavalinkExt extends BaseExtension {
 			state.playing = false;
 			player.isPlaying = false;
 
-			if (!state.skipNext) {
+			if (state.skipNext) {
+				// Nếu đang skip, chuyển sang track tiếp theo
+				this.debug(`Skipping to next track for guild ${player.guildId}`);
+				this.startNextOnLavalink(player).catch((error) => this.debug(`Failed to start next track for ${player.guildId}`, error));
+			} else {
+				// Nếu không skip, chuyển sang track tiếp theo bình thường
 				this.startNextOnLavalink(player).catch((error) => this.debug(`Failed to start next track for ${player.guildId}`, error));
 			}
 			state.skipNext = false;
@@ -384,11 +389,12 @@ export class lavalinkExt extends BaseExtension {
 				connect: player.connect.bind(player),
 			});
 
-			(player as any).skip = () => this.skip(player);
-			(player as any).stop = () => this.stop(player);
-			(player as any).pause = () => this.pause(player);
-			(player as any).resume = () => this.resume(player);
-			(player as any).setVolume = (volume: number) => this.setVolume(player, volume);
+			// Override methods với fallback logic
+			(player as any).skip = () => this.skipWithFallback(player);
+			(player as any).stop = () => this.stopWithFallback(player);
+			(player as any).pause = () => this.pauseWithFallback(player);
+			(player as any).resume = () => this.resumeWithFallback(player);
+			(player as any).setVolume = (volume: number) => this.setVolumeWithFallback(player, volume);
 			(player as any).connect = async (channel: any) => this.connect(player, channel);
 		}
 
@@ -456,7 +462,26 @@ export class lavalinkExt extends BaseExtension {
 
 			const state = this.playerStateManager.getState(player);
 			const shouldStart = !(state?.playing ?? false) && !(player.isPlaying ?? false);
-			const success = shouldStart ? await this.startNextOnLavalink(player) : true;
+			let success = true;
+
+			if (shouldStart) {
+				const lavalinkSuccess = await this.startNextOnLavalink(player);
+				if (!lavalinkSuccess) {
+					this.debug(`Lavalink cannot handle track, letting Player handle with plugin`);
+					success = false;
+				} else {
+					success = lavalinkSuccess;
+				}
+			}
+
+			// Nếu Lavalink không thể xử lý track, không handle để Player xử lý với plugin
+			if (!success && shouldStart) {
+				return {
+					handled: false,
+					success: false,
+					error: new Error("Track not supported by Lavalink"),
+				};
+			}
 
 			return {
 				handled: true,
@@ -493,12 +518,21 @@ export class lavalinkExt extends BaseExtension {
 			const track = payload.track;
 			const state = this.playerStateManager.getState(_context.player);
 
+			// Chỉ cung cấp stream nếu có node Lavalink và đang phát
 			if (!state?.node || !state.playing || !state.track) {
+				this.debug(`provideStream: No Lavalink node or not playing, letting plugin handle`);
 				return null;
 			}
 
 			const currentTrack = state.track;
 			if (getEncoded(currentTrack) !== getEncoded(track)) {
+				this.debug(`provideStream: Track mismatch, letting plugin handle`);
+				return null;
+			}
+
+			// Kiểm tra node có kết nối không
+			if (!state.node.connected || !state.node.wsConnected) {
+				this.debug(`provideStream: Node not connected, letting plugin handle`);
 				return null;
 			}
 
@@ -610,33 +644,49 @@ export class lavalinkExt extends BaseExtension {
 		}
 
 		try {
-			await this.trackResolver.ensureTrackEncoded(player, track, track.requestedBy ?? "Unknown", this.nodeManager);
-			const encoded = getEncoded(track);
-			if (!encoded) throw new Error("Track has no Lavalink payload");
-			track.metadata = {
-				...(track.metadata ?? {}),
-				lavalink: {
-					...((track.metadata ?? {}).lavalink ?? {}),
-					encoded,
-					node: node.identifier,
-				},
-			};
-			this.playerStateManager.setPlayerNode(player, node);
-			state.track = track;
-			state.playing = true;
-			state.paused = false;
-			player.isPlaying = true;
-			player.isPaused = false;
-			await this.nodeManager.updatePlayer(node, player.guildId, {
-				track: {
-					encoded: encoded,
-				},
-				volume: player.volume ?? state.volume ?? 100,
-			});
-			return true;
+			const isLavalinkTrack = track.source === "lavalink" || getEncoded(track);
+
+			if (isLavalinkTrack) {
+				// Track từ Lavalink, cố gắng encode
+				await this.trackResolver.ensureTrackEncoded(player, track, track.requestedBy ?? "Unknown", this.nodeManager);
+				const encoded = getEncoded(track);
+				if (!encoded) throw new Error("Track has no Lavalink payload");
+				track.metadata = {
+					...(track.metadata ?? {}),
+					lavalink: {
+						...((track.metadata ?? {}).lavalink ?? {}),
+						encoded,
+						node: node.identifier,
+					},
+				};
+				this.playerStateManager.setPlayerNode(player, node);
+				state.track = track;
+				state.playing = true;
+				state.paused = false;
+				player.isPlaying = true;
+				player.isPaused = false;
+				await this.nodeManager.updatePlayer(node, player.guildId, {
+					track: {
+						encoded: encoded,
+					},
+					volume: player.volume ?? state.volume ?? 100,
+				});
+				return true;
+			} else {
+				// Track không phải từ Lavalink, để plugin xử lý
+				this.debug(`Track ${track.title} is not from Lavalink, letting plugin handle`);
+				return false;
+			}
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error(String(error));
 			this.debug(`Failed to start track on Lavalink: ${err.message}`);
+
+			// Nếu lỗi là "Track not found on Lavalink", để plugin xử lý
+			if (err.message.includes("Track not found on Lavalink")) {
+				this.debug(`Track not found on Lavalink, letting plugin handle: ${track.title}`);
+				return false;
+			}
+
 			player.emit("playerError", err, track);
 			return this.startNextOnLavalink(player, true);
 		}
@@ -671,26 +721,40 @@ export class lavalinkExt extends BaseExtension {
 	private pause(player: Player): boolean {
 		const state = this.playerStateManager.getState(player);
 		if (!state?.node || !state.playing || state.paused) return false;
+
+		// Kiểm tra xem player có tồn tại trên Lavalink không
+		if (!state.node.connected || !state.node.wsConnected || !state.node.sessionId) {
+			this.debug(`Node not connected, cannot pause on Lavalink`);
+			return false;
+		}
+
 		state.paused = true;
 		player.isPaused = true;
 		const track = state.track ?? player.queue.currentTrack ?? undefined;
 		if (track) player.emit("playerPause", track);
 		this.nodeManager
 			.updatePlayer(state.node, player.guildId, { paused: true })
-			.catch((error) => this.debug(`Pause failed`, error));
+			.catch((error) => this.debug(`Pause failed:`, error.message));
 		return true;
 	}
 
 	private resume(player: Player): boolean {
 		const state = this.playerStateManager.getState(player);
 		if (!state?.node || !state.paused) return false;
+
+		// Kiểm tra xem player có tồn tại trên Lavalink không
+		if (!state.node.connected || !state.node.wsConnected || !state.node.sessionId) {
+			this.debug(`Node not connected, cannot resume on Lavalink`);
+			return false;
+		}
+
 		state.paused = false;
 		player.isPaused = false;
 		const track = state.track ?? player.queue.currentTrack ?? undefined;
 		if (track) player.emit("playerResume", track);
 		this.nodeManager
 			.updatePlayer(state.node, player.guildId, { paused: false })
-			.catch((error) => this.debug(`Resume failed`, error));
+			.catch((error) => this.debug(`Resume failed:`, error.message));
 		return true;
 	}
 
@@ -718,8 +782,23 @@ export class lavalinkExt extends BaseExtension {
 	private skip(player: Player): boolean {
 		const state = this.playerStateManager.getState(player);
 		if (!state?.node) return false;
+
+		// Kiểm tra xem player có tồn tại trên Lavalink không
+		if (!state.node.connected || !state.node.wsConnected || !state.node.sessionId) {
+			this.debug(`Node not connected, cannot skip on Lavalink`);
+			return false;
+		}
+
+		// Kiểm tra xem có track đang phát không
+		if (!state.playing || !state.track) {
+			this.debug(`No track playing, cannot skip on Lavalink`);
+			return false;
+		}
+
 		state.skipNext = true;
-		this.nodeManager.updatePlayer(state.node, player.guildId, { track: null }).catch((error) => this.debug(`Skip failed`, error));
+		// Không gửi request đến Lavalink để skip, chỉ đánh dấu skipNext
+		// WebSocket event sẽ xử lý việc skip khi track kết thúc
+		this.debug(`Marked skipNext for guild ${player.guildId}, will skip on next track end`);
 		return true;
 	}
 
@@ -730,13 +809,83 @@ export class lavalinkExt extends BaseExtension {
 			const original = this.originalMethods.get(player)?.setVolume;
 			return original ? original(volume) : false;
 		}
+
+		// Kiểm tra xem player có tồn tại trên Lavalink không
+		if (!state.node.connected || !state.node.wsConnected || !state.node.sessionId) {
+			this.debug(`Node not connected, cannot set volume on Lavalink`);
+			// Vẫn cập nhật local volume
+			const old = player.volume ?? 100;
+			player.volume = volume;
+			state.volume = volume;
+			player.emit("volumeChange", old, volume);
+			return true;
+		}
+
 		const old = player.volume ?? 100;
 		player.volume = volume;
 		state.volume = volume;
 		player.emit("volumeChange", old, volume);
 		this.nodeManager
 			.updatePlayer(state.node, player.guildId, { volume })
-			.catch((error) => this.debug(`Failed to set volume`, error));
+			.catch((error) => this.debug(`Failed to set volume:`, error.message));
 		return true;
+	}
+
+	// Fallback methods - kiểm tra xem có thể xử lý bằng Lavalink không, nếu không thì fallback về plugin
+	private skipWithFallback(player: Player): boolean {
+		const state = this.playerStateManager.getState(player);
+		if (state?.node && state.playing && state.track) {
+			const lavalinkResult = this.skip(player);
+			// Nếu Lavalink skip thất bại, fallback về plugin
+			if (!lavalinkResult) {
+				this.debug(`Lavalink skip failed, falling back to plugin`);
+				const original = this.originalMethods.get(player)?.skip;
+				return original ? original() : false;
+			}
+			return lavalinkResult;
+		}
+		// Fallback về plugin method
+		const original = this.originalMethods.get(player)?.skip;
+		return original ? original() : false;
+	}
+
+	private stopWithFallback(player: Player): boolean {
+		const state = this.playerStateManager.getState(player);
+		if (state?.node) {
+			return this.stop(player);
+		}
+		// Fallback về plugin method
+		const original = this.originalMethods.get(player)?.stop;
+		return original ? original() : false;
+	}
+
+	private pauseWithFallback(player: Player): boolean {
+		const state = this.playerStateManager.getState(player);
+		if (state?.node && state.playing && state.track) {
+			return this.pause(player);
+		}
+		// Fallback về plugin method
+		const original = this.originalMethods.get(player)?.pause;
+		return original ? original() : false;
+	}
+
+	private resumeWithFallback(player: Player): boolean {
+		const state = this.playerStateManager.getState(player);
+		if (state?.node && state.paused && state.track) {
+			return this.resume(player);
+		}
+		// Fallback về plugin method
+		const original = this.originalMethods.get(player)?.resume;
+		return original ? original() : false;
+	}
+
+	private setVolumeWithFallback(player: Player, volume: number): boolean {
+		const state = this.playerStateManager.getState(player);
+		if (state?.node) {
+			return this.setVolume(player, volume);
+		}
+		// Fallback về plugin method
+		const original = this.originalMethods.get(player)?.setVolume;
+		return original ? original(volume) : false;
 	}
 }

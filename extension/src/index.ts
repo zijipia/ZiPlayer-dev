@@ -17,3 +17,9 @@ export { TrackResolver } from "./resolvers/TrackResolver";
 
 // Utils
 export * from "./utils/helpers";
+
+//voice
+export { voiceExt } from "./voiceExt";
+
+//lyrics
+export { lyricsExt } from "./lyricsExt";

@@ -15,8 +15,7 @@ const client = new Client({
 		GatewayIntentBits.MessageContent,
 	],
 });
-let interval = null;
-// Cấu hình Lavalink với WebSocket optimization
+
 const lavalinkOptions = {
 	nodes: [
 		{
@@ -26,39 +25,25 @@ const lavalinkOptions = {
 			port: 4722,
 			secure: false,
 		},
-		// {
-		// 	host: "localhost",
-		// 	port: 2333,
-		// 	password: "youshallnotpass",
-		// 	identifier: "main-node",
-		// 	secure: false,
-		// },
 	],
 	client: client,
-	clientName: "ziplayer-optimized-bot/1.0.0",
-	searchPrefix: "scsearch", // hoặc "scsearch" cho SoundCloud
-	nodeSort: "players", // Sắp xếp nodes theo số lượng players
-	requestTimeoutMs: 10000,
-	updateInterval: 30000, // 30 giây thay vì 5 giây (WebSocket đã xử lý real-time)
-	debug: true, // Bật debug để xem WebSocket events
+	debug: true,
 };
 
 // Tạo Lavalink extension
 const lavalink = new lavalinkExt(null, lavalinkOptions);
+
 // Tạo PlayerManager
 const manager = new PlayerManager({
-	// Cấu hình player manager
 	plugins: [new YouTubePlugin(), new SoundCloudPlugin(), new SpotifyPlugin()],
-
 	extensions: [lavalink],
 });
 
-// Event handlers để demo WebSocket optimization
+// Event handlers
 client.on("ready", () => {
 	console.log(`Bot đã sẵn sàng! Logged in as ${client.user?.tag}`);
-	console.log("WebSocket optimization đã được kích hoạt!");
+	console.log("Testing Lavalink fallback to plugins...");
 });
-manager.on("debug", console.log);
 // Command handler
 client.on("messageCreate", async (message) => {
 	if (message.author.bot) return;
@@ -76,9 +61,11 @@ client.on("messageCreate", async (message) => {
 
 			const player = await manager.create(message.guild.id, {
 				extensions: ["lavalinkExt"],
-
 				leaveOnEnd: false,
 				leaveOnEmpty: false,
+				userdata: {
+					channel: message.channel,
+				},
 			});
 			if (!player) {
 				message.reply("Bot chưa kết nối voice channel!");
@@ -88,15 +75,14 @@ client.on("messageCreate", async (message) => {
 
 			await player.connect(voiceChannel);
 			try {
-				// WebSocket sẽ xử lý track events real-time
 				const result = await player.play(query, {
 					requestedBy: message.author.id,
 				});
 
 				player.autoPlay(true);
 
-				if (result.success) {
-					message.reply(`Đang phát: ${result.track?.title || "Unknown"}`);
+				if (result) {
+					message.reply(`Đang phát!`);
 				} else {
 					message.reply("Không thể phát bài hát này!");
 				}
@@ -115,7 +101,7 @@ client.on("messageCreate", async (message) => {
 			}
 
 			if (player.pause()) {
-				message.reply("Đã tạm dừng nhạc!");
+				message.reply("Đã tạm dừng nhạc! ");
 			} else {
 				message.reply("Không thể tạm dừng nhạc!");
 			}
@@ -130,7 +116,7 @@ client.on("messageCreate", async (message) => {
 			}
 
 			if (player.resume()) {
-				message.reply("Đã tiếp tục phát nhạc!");
+				message.reply("Đã tiếp tục phát nhạc! ");
 			} else {
 				message.reply("Không thể tiếp tục phát nhạc!");
 			}
@@ -144,7 +130,7 @@ client.on("messageCreate", async (message) => {
 				return;
 			}
 
-			if (player.stop()) {
+			if (player.destroy()) {
 				message.reply("Đã dừng nhạc!");
 			} else {
 				message.reply("Không thể dừng nhạc!");
@@ -160,7 +146,7 @@ client.on("messageCreate", async (message) => {
 			}
 
 			if (player.skip()) {
-				message.reply("Đã bỏ qua bài hát!");
+				message.reply("Đã bỏ qua bài hát! ");
 			} else {
 				message.reply("Không thể bỏ qua bài hát!");
 			}
@@ -181,7 +167,7 @@ client.on("messageCreate", async (message) => {
 			}
 
 			if (player.setVolume(volume)) {
-				message.reply(`Đã đặt volume thành ${volume}%!`);
+				message.reply(`Đã đặt volume thành ${volume}%! `);
 			} else {
 				message.reply("Không thể thay đổi volume!");
 			}
@@ -203,88 +189,65 @@ client.on("messageCreate", async (message) => {
 				queueLength: player.queue.length,
 			};
 
-			message.reply(`**Trạng thái bot:**
+			message.reply(`**Trạng thái bot (Fallback Mode):**
 🎵 Đang phát: ${status.playing ? "Có" : "Không"}
 ⏸️ Tạm dừng: ${status.paused ? "Có" : "Không"}
 🎶 Bài hiện tại: ${status.currentTrack}
 🔊 Volume: ${status.volume}%
+🎵 Will play next: ${player.queue.willNextTrack?.title || "None"}
+🔁 Autoplay: ${player.queue.autoPlay() ? "Có" : "Không"}
+source: ${player.queue.currentTrack?.source || "None"}
 📋 Số bài trong hàng đợi: ${status.queueLength}`);
-			break;
-		}
-		case "!livestat": {
-			const player = manager.getPlayer(message.guild.id);
-			if (!player) {
-				message.reply("Bot chưa kết nối voice channel!");
-				return;
-			}
-			if (interval) {
-				clearInterval(interval);
-				interval = null;
-				return;
-			}
-			interval = setInterval(() => {
-				const status = {
-					playing: player.isPlaying,
-					paused: player.isPaused,
-					currentTrack: player.queue.currentTrack?.title || "None",
-					volume: player.volume,
-					queueLength: player.queue.length,
-				};
-
-				message.reply(`**Trạng thái bot:**
-    🎵 Đang phát: ${status.playing ? "Có" : "Không"}
-    ⏸️ Tạm dừng: ${status.paused ? "Có" : "Không"}
-    🎶 Bài hiện tại: ${status.currentTrack}
-    🔊 Volume: ${status.volume}%
-    📋 Số bài trong hàng đợi: ${status.queueLength}`);
-			}, 15000);
 			break;
 		}
 	}
 });
 
-// WebSocket sẽ xử lý các events này real-time
 manager.on("trackStart", (player, track) => {
-	console.log(`🎵 Started playing: ${track.title}`);
+	console.log(`🎵 Started playing : ${track.title}`);
+	player.userdata.channel.send(`🎵 Started playing : ${track.title}`);
 });
 
-manager.on("trackEnd", (track) => {
-	console.log(`🏁 Finished playing: ${track.title}`);
+manager.on("trackEnd", (player, track) => {
+	console.log(`🏁 Finished playing : ${track.title}`);
+	player.userdata.channel.send(`🏁 Finished playing : ${track.title}`);
 });
 
 manager.on("playerError", (error, track) => {
 	console.error(`❌ Player error:`, error.message);
 });
 
-manager.on("queueEnd", () => {
+manager.on("queueEnd", (player) => {
 	console.log("📋 Queue ended");
 });
-manager.on("debug", console.log);
-manager.on("willPlay", (player, track, tracks) => {
-	console.log(`🎵 Will play: ${track.title}`, tracks);
+
+manager.on("willPlay", (player, track, upcomming) => {
+	console.log(`🎵 Will play : ${track.title}`);
+	player.userdata.channel.send(`🎵 Will play next : ${track.title}`);
 });
+
+manager.on("debug", console.log);
+
 // Kết nối bot
-client.login(process.env.DISCORD_TOKEN); // Thay thế bằng token của bot
+client.login(process.env.DISCORD_TOKEN);
 
 console.log(`
-🤖 WebSocket Optimized Music Bot
-================================
+🤖 Lavalink Test Bot
+============================
 
-Tính năng WebSocket optimization:
-✅ Real-time player updates
-✅ Instant track events
-✅ Reduced REST API calls (83% reduction)
-✅ Better performance
-✅ Lower server load
+Tính năng fallback:
+✅ Khi Lavalink không khả dụng, tự động fallback về plugins
+✅ Các functions skip, pause, resume hoạt động bình thường
+✅ Volume control hoạt động
+✅ Debug logs hiển thị fallback mode
 
 Commands:
-!play <query> - Phát nhạc
-!pause - Tạm dừng
-!resume - Tiếp tục
-!stop - Dừng
-!skip - Bỏ qua
-!volume <0-200> - Đặt volume
+!play <query> - Phát nhạc (sẽ fallback về plugin)
+!pause - Tạm dừng (fallback)
+!resume - Tiếp tục (fallback)
+!stop - Dừng (fallback)
+!skip - Bỏ qua (fallback)
+!volume <0-200> - Đặt volume (fallback)
 !status - Xem trạng thái
 
-Debug logs sẽ hiển thị WebSocket events real-time!
 `);
