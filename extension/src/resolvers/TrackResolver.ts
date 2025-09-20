@@ -85,7 +85,8 @@ export class TrackResolver {
 			throw new Error("Track not found on Lavalink");
 		}
 
-		const raws = Array.isArray(response.data) ? response.data : (response.data as LavalinkPlaylistData | undefined)?.tracks ?? [];
+		const raws =
+			Array.isArray(response.data) ? response.data : ((response.data as LavalinkPlaylistData | undefined)?.tracks ?? []);
 		const raw = raws[0];
 		if (!raw) throw new Error("Track not found on Lavalink");
 		const mapped = this.mapToTrack(raw, requestedBy);

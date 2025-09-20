@@ -714,7 +714,9 @@ export function ApiContent() {
 					<button
 						onClick={() => copyCode(currentContent.code)}
 						className='flex items-center gap-2 px-3 py-1 bg-gray-700/50 backdrop-blur-sm hover:bg-gray-600/50 text-white rounded transition-colors border border-gray-600/30'>
-						{copiedCode === currentContent.code ? <Check className='w-4 h-4' /> : <Copy className='w-4 h-4' />}
+						{copiedCode === currentContent.code ?
+							<Check className='w-4 h-4' />
+						:	<Copy className='w-4 h-4' />}
 						{copiedCode === currentContent.code ? "Copied!" : "Copy"}
 					</button>
 				</div>
@@ -748,7 +750,9 @@ export function ApiContent() {
 									<button
 										onClick={() => copyCode(method.example)}
 										className='flex items-center gap-2 px-3 py-1 bg-gray-700/50 backdrop-blur-sm hover:bg-gray-600/50 text-white rounded transition-colors border border-gray-600/30'>
-										{copiedCode === method.example ? <Check className='w-4 h-4' /> : <Copy className='w-4 h-4' />}
+										{copiedCode === method.example ?
+											<Check className='w-4 h-4' />
+										:	<Copy className='w-4 h-4' />}
 									</button>
 								</div>
 								<div className='bg-gray-900/50 backdrop-blur-sm rounded p-4 border border-gray-700/30'>
@@ -795,27 +799,27 @@ export function ApiContent() {
 					<button
 						onClick={() => setActiveSection("playermanager")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "playermanager"
-								? "bg-blue-600/80 text-white border-blue-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "playermanager" ?
+								"bg-blue-600/80 text-white border-blue-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						PlayerManager
 					</button>
 					<button
 						onClick={() => setActiveSection("player")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "player"
-								? "bg-blue-600/80 text-white border-blue-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "player" ?
+								"bg-blue-600/80 text-white border-blue-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						Player
 					</button>
 					<button
 						onClick={() => setActiveSection("queue")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "queue"
-								? "bg-blue-600/80 text-white border-blue-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "queue" ?
+								"bg-blue-600/80 text-white border-blue-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						Queue
 					</button>
@@ -826,54 +830,54 @@ export function ApiContent() {
 					<button
 						onClick={() => setActiveSection("track")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "track"
-								? "bg-green-600/80 text-white border-green-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "track" ?
+								"bg-green-600/80 text-white border-green-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						Track
 					</button>
 					<button
 						onClick={() => setActiveSection("searchresult")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "searchresult"
-								? "bg-green-600/80 text-white border-green-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "searchresult" ?
+								"bg-green-600/80 text-white border-green-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						SearchResult
 					</button>
 					<button
 						onClick={() => setActiveSection("streaminfo")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "streaminfo"
-								? "bg-green-600/80 text-white border-green-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "streaminfo" ?
+								"bg-green-600/80 text-white border-green-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						StreamInfo
 					</button>
 					<button
 						onClick={() => setActiveSection("playeroptions")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "playeroptions"
-								? "bg-green-600/80 text-white border-green-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "playeroptions" ?
+								"bg-green-600/80 text-white border-green-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						PlayerOptions
 					</button>
 					<button
 						onClick={() => setActiveSection("playermanageroptions")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "playermanageroptions"
-								? "bg-green-600/80 text-white border-green-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "playermanageroptions" ?
+								"bg-green-600/80 text-white border-green-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						PlayerManagerOptions
 					</button>
 					<button
 						onClick={() => setActiveSection("playerevents")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "playerevents"
-								? "bg-green-600/80 text-white border-green-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "playerevents" ?
+								"bg-green-600/80 text-white border-green-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						PlayerEvents
 					</button>
@@ -884,27 +888,27 @@ export function ApiContent() {
 					<button
 						onClick={() => setActiveSection("lavalinkext")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "lavalinkext"
-								? "bg-purple-600/80 text-white border-purple-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "lavalinkext" ?
+								"bg-purple-600/80 text-white border-purple-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						lavalinkExt
 					</button>
 					<button
 						onClick={() => setActiveSection("voiceext")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "voiceext"
-								? "bg-purple-600/80 text-white border-purple-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "voiceext" ?
+								"bg-purple-600/80 text-white border-purple-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						voiceExt
 					</button>
 					<button
 						onClick={() => setActiveSection("lyricsext")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "lyricsext"
-								? "bg-purple-600/80 text-white border-purple-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "lyricsext" ?
+								"bg-purple-600/80 text-white border-purple-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						lyricsExt
 					</button>
@@ -915,36 +919,36 @@ export function ApiContent() {
 					<button
 						onClick={() => setActiveSection("youtubeplugin")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "youtubeplugin"
-								? "bg-red-600/80 text-white border-red-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "youtubeplugin" ?
+								"bg-red-600/80 text-white border-red-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						YouTubePlugin
 					</button>
 					<button
 						onClick={() => setActiveSection("soundcloudplugin")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "soundcloudplugin"
-								? "bg-orange-600/80 text-white border-orange-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "soundcloudplugin" ?
+								"bg-orange-600/80 text-white border-orange-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						SoundCloudPlugin
 					</button>
 					<button
 						onClick={() => setActiveSection("spotifyplugin")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "spotifyplugin"
-								? "bg-green-500/80 text-white border-green-400/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "spotifyplugin" ?
+								"bg-green-500/80 text-white border-green-400/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						SpotifyPlugin
 					</button>
 					<button
 						onClick={() => setActiveSection("ttsplugin")}
 						className={`px-3 py-1 text-sm rounded transition-colors backdrop-blur-sm border ${
-							activeSection === "ttsplugin"
-								? "bg-indigo-600/80 text-white border-indigo-500/50"
-								: "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
+							activeSection === "ttsplugin" ?
+								"bg-indigo-600/80 text-white border-indigo-500/50"
+							:	"bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border-gray-600/30"
 						}`}>
 						TTSPlugin
 					</button>

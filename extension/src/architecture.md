@@ -82,4 +82,3 @@ sequenceDiagram
     PS-->>L: Voice ready
     L->>L: Send voice update
 ```
-

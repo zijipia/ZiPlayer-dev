@@ -62,4 +62,3 @@ export function Logo({ variant = "icon", size = "md", className = "", animated =
 		</LogoComponent>
 	);
 }
-
