@@ -24,28 +24,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Verify package-lock.json exists
-        run: |
-          if [ ! -f "page/package-lock.json" ]; then
-            echo "package-lock.json not found, generating it..."
-            cd page
-            npm install
-            cd ..
-          else
-            echo "package-lock.json found"
-          fi
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "18"
           cache: "npm"
-          cache-dependency-path: page/package-lock.json
+          cache-dependency-path: page/package.json
 
       - name: Install dependencies
         run: |
           cd page
-          npm ci
+          npm install
 
       - name: Generate API Documentation
         run: |
