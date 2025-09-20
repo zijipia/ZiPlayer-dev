@@ -14,12 +14,52 @@ function isValidSoundCloudHost(maybeUrl: string): boolean {
 		return false;
 	}
 }
+/**
+ * A plugin for handling SoundCloud audio content including tracks, playlists, and search functionality.
+ *
+ * This plugin provides comprehensive support for:
+ * - SoundCloud track URLs (soundcloud.com)
+ * - SoundCloud playlist URLs
+ * - SoundCloud search queries
+ * - Audio stream extraction from SoundCloud tracks
+ * - Related track recommendations
+ *
+ * @example
+ * ```typescript
+ * const soundcloudPlugin = new SoundCloudPlugin();
+ *
+ * // Add to PlayerManager
+ * const manager = new PlayerManager({
+ *   plugins: [soundcloudPlugin]
+ * });
+ *
+ * // Search for tracks
+ * const result = await soundcloudPlugin.search("chill music", "user123");
+ *
+ * // Get audio stream
+ * const stream = await soundcloudPlugin.getStream(result.tracks[0]);
+ * ```
+ *
+ * @since 1.0.0
+ */
 export class SoundCloudPlugin extends BasePlugin {
 	name = "soundcloud";
 	version = "1.0.0";
 	private client: any;
 	private ready: Promise<void>;
 
+	/**
+	 * Creates a new SoundCloudPlugin instance.
+	 *
+	 * The plugin will automatically initialize the SoundCloud client for track
+	 * and playlist operations. Initialization is asynchronous and handled internally.
+	 *
+	 * @example
+	 * ```typescript
+	 * const plugin = new SoundCloudPlugin();
+	 * // Plugin is ready to use after initialization completes
+	 * ```
+	 */
 	constructor() {
 		super();
 		this.ready = this.init();
@@ -30,6 +70,19 @@ export class SoundCloudPlugin extends BasePlugin {
 		await this.client.init();
 	}
 
+	/**
+	 * Determines if this plugin can handle the given query.
+	 *
+	 * @param query - The search query or URL to check
+	 * @returns `true` if the plugin can handle the query, `false` otherwise
+	 *
+	 * @example
+	 * ```typescript
+	 * plugin.canHandle("https://soundcloud.com/artist/track"); // true
+	 * plugin.canHandle("chill music"); // true
+	 * plugin.canHandle("spotify:track:123"); // false
+	 * ```
+	 */
 	canHandle(query: string): boolean {
 		const q = (query || "").trim().toLowerCase();
 		const isUrl = q.startsWith("http://") || q.startsWith("https://");
@@ -46,10 +99,44 @@ export class SoundCloudPlugin extends BasePlugin {
 		return true;
 	}
 
+	/**
+	 * Validates if a URL is a valid SoundCloud URL.
+	 *
+	 * @param url - The URL to validate
+	 * @returns `true` if the URL is a valid SoundCloud URL, `false` otherwise
+	 *
+	 * @example
+	 * ```typescript
+	 * plugin.validate("https://soundcloud.com/artist/track"); // true
+	 * plugin.validate("https://www.soundcloud.com/artist/track"); // true
+	 * plugin.validate("https://youtube.com/watch?v=123"); // false
+	 * ```
+	 */
 	validate(url: string): boolean {
 		return isValidSoundCloudHost(url);
 	}
 
+	/**
+	 * Searches for SoundCloud content based on the given query.
+	 *
+	 * This method handles both URL-based queries (direct track/playlist links) and
+	 * text-based search queries. For URLs, it will extract track or playlist information.
+	 * For text queries, it will perform a SoundCloud search and return up to 10 results.
+	 *
+	 * @param query - The search query (URL or text)
+	 * @param requestedBy - The user ID who requested the search
+	 * @returns A SearchResult containing tracks and optional playlist information
+	 *
+	 * @example
+	 * ```typescript
+	 * // Search by URL
+	 * const result = await plugin.search("https://soundcloud.com/artist/track", "user123");
+	 *
+	 * // Search by text
+	 * const searchResult = await plugin.search("chill music", "user123");
+	 * console.log(searchResult.tracks); // Array of Track objects
+	 * ```
+	 */
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		await this.ready;
 
@@ -130,6 +217,25 @@ export class SoundCloudPlugin extends BasePlugin {
 		}
 	}
 
+	/**
+	 * Retrieves the audio stream for a SoundCloud track.
+	 *
+	 * This method downloads the audio stream from SoundCloud using the track's URL.
+	 * It handles the SoundCloud-specific download process and returns the stream
+	 * in a format compatible with the player.
+	 *
+	 * @param track - The Track object to get the stream for
+	 * @returns A StreamInfo object containing the audio stream and metadata
+	 * @throws {Error} If the track URL is invalid or stream download fails
+	 *
+	 * @example
+	 * ```typescript
+	 * const track = { id: "123", title: "Track Title", url: "https://soundcloud.com/artist/track", ... };
+	 * const streamInfo = await plugin.getStream(track);
+	 * console.log(streamInfo.type); // "arbitrary"
+	 * console.log(streamInfo.stream); // Readable stream
+	 * ```
+	 */
 	async getStream(track: Track): Promise<StreamInfo> {
 		await this.ready;
 
@@ -149,6 +255,29 @@ export class SoundCloudPlugin extends BasePlugin {
 		}
 	}
 
+	/**
+	 * Gets related tracks for a given SoundCloud track.
+	 *
+	 * This method fetches related tracks from SoundCloud's recommendation system
+	 * based on the provided track URL or ID. It can filter out tracks that are
+	 * already in the history to avoid duplicates.
+	 *
+	 * @param trackURL - The SoundCloud track URL or ID to get related tracks for
+	 * @param opts - Options for filtering and limiting results
+	 * @param opts.limit - Maximum number of related tracks to return (default: 1)
+	 * @param opts.offset - Number of tracks to skip from the beginning (default: 0)
+	 * @param opts.history - Array of tracks to exclude from results
+	 * @returns An array of related Track objects
+	 *
+	 * @example
+	 * ```typescript
+	 * const related = await plugin.getRelatedTracks(
+	 *   "https://soundcloud.com/artist/track",
+	 *   { limit: 3, history: [currentTrack] }
+	 * );
+	 * console.log(`Found ${related.length} related tracks`);
+	 * ```
+	 */
 	async getRelatedTracks(
 		trackURL: string | number,
 		opts: { limit?: number; offset?: number; history?: Track[] } = {},
@@ -185,6 +314,27 @@ export class SoundCloudPlugin extends BasePlugin {
 		}
 	}
 
+	/**
+	 * Provides a fallback stream by searching for the track title.
+	 *
+	 * This method is used when the primary stream extraction fails. It performs
+	 * a search using the track's title and attempts to get a stream from the
+	 * first search result.
+	 *
+	 * @param track - The Track object to get a fallback stream for
+	 * @returns A StreamInfo object containing the fallback audio stream
+	 * @throws {Error} If no fallback track is found or stream extraction fails
+	 *
+	 * @example
+	 * ```typescript
+	 * try {
+	 *   const stream = await plugin.getStream(track);
+	 * } catch (error) {
+	 *   // Try fallback
+	 *   const fallbackStream = await plugin.getFallback(track);
+	 * }
+	 * ```
+	 */
 	async getFallback(track: Track): Promise<StreamInfo> {
 		const trackfall = await this.search(track.title, track.requestedBy);
 		const fallbackTrack = trackfall.tracks?.[0];
@@ -194,6 +344,22 @@ export class SoundCloudPlugin extends BasePlugin {
 		return await this.getStream(fallbackTrack);
 	}
 
+	/**
+	 * Extracts tracks from a SoundCloud playlist URL.
+	 *
+	 * @param url - The SoundCloud playlist URL
+	 * @param requestedBy - The user ID who requested the extraction
+	 * @returns An array of Track objects from the playlist
+	 *
+	 * @example
+	 * ```typescript
+	 * const tracks = await plugin.extractPlaylist(
+	 *   "https://soundcloud.com/artist/sets/playlist-name",
+	 *   "user123"
+	 * );
+	 * console.log(`Found ${tracks.length} tracks in playlist`);
+	 * ```
+	 */
 	async extractPlaylist(url: string, requestedBy: string): Promise<Track[]> {
 		await this.ready;
 		try {

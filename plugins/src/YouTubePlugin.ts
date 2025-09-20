@@ -2,6 +2,34 @@ import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
 
 import { Innertube, Log } from "youtubei.js";
 
+/**
+ * A plugin for handling YouTube audio content including videos, playlists, and search functionality.
+ *
+ * This plugin provides comprehensive support for:
+ * - YouTube video URLs (youtube.com, youtu.be, music.youtube.com)
+ * - YouTube playlist URLs and dynamic mixes
+ * - YouTube search queries
+ * - Audio stream extraction from YouTube videos
+ * - Related track recommendations
+ *
+ * @example
+ * ```typescript
+ * const youtubePlugin = new YouTubePlugin();
+ *
+ * // Add to PlayerManager
+ * const manager = new PlayerManager({
+ *   plugins: [youtubePlugin]
+ * });
+ *
+ * // Search for videos
+ * const result = await youtubePlugin.search("Never Gonna Give You Up", "user123");
+ *
+ * // Get audio stream
+ * const stream = await youtubePlugin.getStream(result.tracks[0]);
+ * ```
+ *
+ * @since 1.0.0
+ */
 export class YouTubePlugin extends BasePlugin {
 	name = "youtube";
 	version = "1.0.0";
@@ -10,6 +38,18 @@ export class YouTubePlugin extends BasePlugin {
 	private searchClient!: Innertube;
 	private ready: Promise<void>;
 
+	/**
+	 * Creates a new YouTubePlugin instance.
+	 *
+	 * The plugin will automatically initialize YouTube clients for both video playback
+	 * and search functionality. Initialization is asynchronous and handled internally.
+	 *
+	 * @example
+	 * ```typescript
+	 * const plugin = new YouTubePlugin();
+	 * // Plugin is ready to use after initialization completes
+	 * ```
+	 */
 	constructor() {
 		super();
 		this.ready = this.init();
@@ -104,6 +144,19 @@ export class YouTubePlugin extends BasePlugin {
 		} as Track;
 	}
 
+	/**
+	 * Determines if this plugin can handle the given query.
+	 *
+	 * @param query - The search query or URL to check
+	 * @returns `true` if the plugin can handle the query, `false` otherwise
+	 *
+	 * @example
+	 * ```typescript
+	 * plugin.canHandle("https://www.youtube.com/watch?v=dQw4w9WgXcQ"); // true
+	 * plugin.canHandle("Never Gonna Give You Up"); // true
+	 * plugin.canHandle("spotify:track:123"); // false
+	 * ```
+	 */
 	canHandle(query: string): boolean {
 		const q = (query || "").trim().toLowerCase();
 		const isUrl = q.startsWith("http://") || q.startsWith("https://");
@@ -126,6 +179,19 @@ export class YouTubePlugin extends BasePlugin {
 		return true;
 	}
 
+	/**
+	 * Validates if a URL is a valid YouTube URL.
+	 *
+	 * @param url - The URL to validate
+	 * @returns `true` if the URL is a valid YouTube URL, `false` otherwise
+	 *
+	 * @example
+	 * ```typescript
+	 * plugin.validate("https://www.youtube.com/watch?v=dQw4w9WgXcQ"); // true
+	 * plugin.validate("https://youtu.be/dQw4w9WgXcQ"); // true
+	 * plugin.validate("https://spotify.com/track/123"); // false
+	 * ```
+	 */
 	validate(url: string): boolean {
 		try {
 			const parsed = new URL(url);
@@ -136,6 +202,27 @@ export class YouTubePlugin extends BasePlugin {
 		}
 	}
 
+	/**
+	 * Searches for YouTube content based on the given query.
+	 *
+	 * This method handles both URL-based queries (direct video/playlist links) and
+	 * text-based search queries. For URLs, it will extract video or playlist information.
+	 * For text queries, it will perform a YouTube search and return up to 10 results.
+	 *
+	 * @param query - The search query (URL or text)
+	 * @param requestedBy - The user ID who requested the search
+	 * @returns A SearchResult containing tracks and optional playlist information
+	 *
+	 * @example
+	 * ```typescript
+	 * // Search by URL
+	 * const result = await plugin.search("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "user123");
+	 *
+	 * // Search by text
+	 * const searchResult = await plugin.search("Never Gonna Give You Up", "user123");
+	 * console.log(searchResult.tracks); // Array of Track objects
+	 * ```
+	 */
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		await this.ready;
 
@@ -202,6 +289,22 @@ export class YouTubePlugin extends BasePlugin {
 		return { tracks };
 	}
 
+	/**
+	 * Extracts tracks from a YouTube playlist URL.
+	 *
+	 * @param url - The YouTube playlist URL
+	 * @param requestedBy - The user ID who requested the extraction
+	 * @returns An array of Track objects from the playlist
+	 *
+	 * @example
+	 * ```typescript
+	 * const tracks = await plugin.extractPlaylist(
+	 *   "https://www.youtube.com/playlist?list=PLrAXtmRdnEQy6nuLMOV8uM0bMq3MUfHc1",
+	 *   "user123"
+	 * );
+	 * console.log(`Found ${tracks.length} tracks in playlist`);
+	 * ```
+	 */
 	async extractPlaylist(url: string, requestedBy: string): Promise<Track[]> {
 		await this.ready;
 
@@ -233,6 +336,25 @@ export class YouTubePlugin extends BasePlugin {
 		}
 	}
 
+	/**
+	 * Retrieves the audio stream for a YouTube track.
+	 *
+	 * This method extracts the audio stream from a YouTube video using the YouTube client.
+	 * It attempts to get the best quality audio stream available and handles various
+	 * format fallbacks if the primary method fails.
+	 *
+	 * @param track - The Track object to get the stream for
+	 * @returns A StreamInfo object containing the audio stream and metadata
+	 * @throws {Error} If the track ID is invalid or stream extraction fails
+	 *
+	 * @example
+	 * ```typescript
+	 * const track = { id: "dQw4w9WgXcQ", title: "Never Gonna Give You Up", ... };
+	 * const streamInfo = await plugin.getStream(track);
+	 * console.log(streamInfo.type); // "arbitrary"
+	 * console.log(streamInfo.stream); // Readable stream
+	 * ```
+	 */
 	async getStream(track: Track): Promise<StreamInfo> {
 		await this.ready;
 
@@ -295,6 +417,29 @@ export class YouTubePlugin extends BasePlugin {
 		}
 	}
 
+	/**
+	 * Gets related tracks for a given YouTube video.
+	 *
+	 * This method fetches the "watch next" feed from YouTube to find related videos
+	 * that are similar to the provided track. It can filter out tracks that are
+	 * already in the history to avoid duplicates.
+	 *
+	 * @param trackURL - The YouTube video URL to get related tracks for
+	 * @param opts - Options for filtering and limiting results
+	 * @param opts.limit - Maximum number of related tracks to return (default: 5)
+	 * @param opts.offset - Number of tracks to skip from the beginning (default: 0)
+	 * @param opts.history - Array of tracks to exclude from results
+	 * @returns An array of related Track objects
+	 *
+	 * @example
+	 * ```typescript
+	 * const related = await plugin.getRelatedTracks(
+	 *   "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+	 *   { limit: 3, history: [currentTrack] }
+	 * );
+	 * console.log(`Found ${related.length} related tracks`);
+	 * ```
+	 */
 	async getRelatedTracks(trackURL: string, opts: { limit?: number; offset?: number; history?: Track[] } = {}): Promise<Track[]> {
 		await this.ready;
 		const videoId = this.extractVideoId(trackURL);
@@ -315,6 +460,27 @@ export class YouTubePlugin extends BasePlugin {
 		return relatedfilter.slice(offset, offset + limit).map((v: any) => this.buildTrack(v, "auto"));
 	}
 
+	/**
+	 * Provides a fallback stream by searching for the track title.
+	 *
+	 * This method is used when the primary stream extraction fails. It performs
+	 * a search using the track's title and attempts to get a stream from the
+	 * first search result.
+	 *
+	 * @param track - The Track object to get a fallback stream for
+	 * @returns A StreamInfo object containing the fallback audio stream
+	 * @throws {Error} If no fallback track is found or stream extraction fails
+	 *
+	 * @example
+	 * ```typescript
+	 * try {
+	 *   const stream = await plugin.getStream(track);
+	 * } catch (error) {
+	 *   // Try fallback
+	 *   const fallbackStream = await plugin.getFallback(track);
+	 * }
+	 * ```
+	 */
 	async getFallback(track: Track): Promise<StreamInfo> {
 		try {
 			const result = await this.search(track.title, track.requestedBy);
