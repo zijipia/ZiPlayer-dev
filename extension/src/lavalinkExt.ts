@@ -355,21 +355,23 @@ export class lavalinkExt extends BaseExtension {
 		}
 
 		// Handle track end based on reason
-		if (message.reason === "finished" || message.reason === "loadFailed") {
+		if (message.reason === "finished" || message.reason === "loadFailed" || message.reason === "stopped") {
 			state.track = null;
 			state.playing = false;
 			player.isPlaying = false;
 
-			if (state.skipNext) {
-				// Nếu đang skip, chuyển sang track tiếp theo
-				this.debug(`Skipping to next track for guild ${player.guildId}`);
-				this.startNextOnLavalink(player).catch((error) => this.debug(`Failed to start next track for ${player.guildId}`, error));
-			} else {
-				// Nếu không skip, chuyển sang track tiếp theo bình thường
-				this.startNextOnLavalink(player).catch((error) => this.debug(`Failed to start next track for ${player.guildId}`, error));
-			}
-			state.skipNext = false;
-		} else if (message.reason === "stopped" || message.reason === "replaced" || message.reason === "cleanup") {
+			// Luôn chuyển sang track tiếp theo khi track kết thúc
+			this.debug(`Track ended (${message.reason}), starting next track for guild ${player.guildId}`);
+			this.startNextOnLavalink(player).catch((error) => {
+				this.debug(`Failed to start next track for ${player.guildId}`, error);
+				// Nếu Lavalink không thể xử lý track tiếp theo, giao cho Player
+				this.debug(`Delegating to Player for next track after Lavalink failure`);
+				const original = this.originalMethods.get(player)?.skip;
+				if (original) {
+					original();
+				}
+			});
+		} else if (message.reason === "replaced" || message.reason === "cleanup") {
 			state.track = null;
 			state.playing = false;
 			player.isPlaying = false;
@@ -951,7 +953,7 @@ export class lavalinkExt extends BaseExtension {
 		return true;
 	}
 
-	private skip(player: Player): boolean {
+	private async skip(player: Player): Promise<boolean> {
 		const state = this.playerStateManager.getState(player);
 		if (!state?.node) return false;
 
@@ -967,10 +969,14 @@ export class lavalinkExt extends BaseExtension {
 			return false;
 		}
 
-		state.skipNext = true;
-		// Không gửi request đến Lavalink để skip, chỉ đánh dấu skipNext
-		// WebSocket event sẽ xử lý việc skip khi track kết thúc
-		this.debug(`Marked skipNext for guild ${player.guildId}, will skip on next track end`);
+		// Gửi request skip trực tiếp đến Lavalink
+		await this.nodeManager.updatePlayer(state.node, player.guildId, {
+			track: null,
+			paused: false,
+		});
+
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
 		return true;
 	}
 
@@ -1004,19 +1010,37 @@ export class lavalinkExt extends BaseExtension {
 	}
 
 	// Fallback methods - kiểm tra xem có thể xử lý bằng Lavalink không, nếu không thì fallback về plugin
-	private skipWithFallback(player: Player): boolean {
+	private async skipWithFallback(player: Player): Promise<boolean> {
 		const state = this.playerStateManager.getState(player);
-		if (state?.node && state.playing && state.track) {
-			const lavalinkResult = this.skip(player);
-			// Nếu Lavalink skip thất bại, fallback về plugin
-			if (!lavalinkResult) {
-				this.debug(`Lavalink skip failed, falling back to plugin`);
-				const original = this.originalMethods.get(player)?.skip;
-				return original ? original() : false;
-			}
-			return lavalinkResult;
+
+		// Nếu không có Lavalink node hoặc không đang phát track Lavalink, giao cho Player
+		if (!state?.node || !state.playing || !state.track) {
+			this.debug(`No Lavalink node or not playing Lavalink track, delegating to Player`);
+			const original = this.originalMethods.get(player)?.skip;
+			return original ? original() : false;
 		}
-		// Fallback về plugin method
+
+		// Kiểm tra xem node có kết nối không
+		if (!state.node.connected || !state.node.wsConnected || !state.node.sessionId) {
+			this.debug(`Lavalink node not connected, delegating to Player`);
+			const original = this.originalMethods.get(player)?.skip;
+			return original ? original() : false;
+		}
+
+		// Thử skip trên Lavalink
+		try {
+			const lavalinkResult = await this.skip(player);
+			if (lavalinkResult) {
+				this.debug(`Skip handled by Lavalink for guild ${player.guildId}`);
+			} else {
+				this.debug(`Skip failed, delegating to Player for guild ${player.guildId}`);
+			}
+		} catch (error) {
+			this.debug(`Lavalink skip failed, delegating to Player:`, error);
+		}
+
+		// Fallback về Player method
+		this.debug(`Delegating skip to Player for guild ${player.guildId}`);
 		const original = this.originalMethods.get(player)?.skip;
 		return original ? original() : false;
 	}

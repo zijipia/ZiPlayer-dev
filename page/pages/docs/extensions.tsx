@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Sidebar } from "@/components/Sidebar";
 import { CodeBlock } from "@/components/CodeBlock";
 import { motion } from "framer-motion";
-import { Zap, Mic, Volume2, MessageSquare, CheckCircle, ArrowRight, Info, Code } from "lucide-react";
+import { Zap, Mic, Volume2, MessageSquare, CheckCircle, ArrowRight, Music, Code } from "lucide-react";
 
 const extensionExampleCode = `import { BaseExtension } from "@ziplayer/extension";
 
@@ -32,7 +32,7 @@ export class CustomExtension extends BaseExtension {
   }
 }`;
 
-const voiceExtensionCode = `import { voiceExt, lyricsExt } from "@ziplayer/extension";
+const voiceExtensionCode = `import { voiceExt, lyricsExt, lavalinkExt } from "@ziplayer/extension";
 
 const lrc = new lyricsExt(null, {
 	includeSynced: true,
@@ -40,10 +40,15 @@ const lrc = new lyricsExt(null, {
 	sanitizeTitle: true,
 });
 
+const lavalink = new lavalinkExt(null, {
+	// Lavalink configuration
+});
+
 const manager = new PlayerManager({
   extensions: [
-  lrc,
-   new voiceExt(null, { client, lang: "en-US", minimalVoiceMessageDuration: 1 })
+    lrc,
+    new voiceExt(null, { client, lang: "en-US", minimalVoiceMessageDuration: 1 }),
+    lavalink
   ]
 });
 
@@ -51,8 +56,16 @@ const player = await manager.create(message.guild.id, {
 	userdata: {
 		channel: message.channel,
 	},
-	extensions: ["lyricsExt","voiceExt"],
+	extensions: ["lyricsExt", "voiceExt", "lavalinkExt"],
 });
+
+// Khi destroy player, lavalink extension sẽ:
+// 1. Ngắt kết nối hoàn toàn với Lavalink server
+// 2. Không tự động kết nối lại
+// 3. Cleanup tất cả resources
+// 4. Gọi onDestroy() lifecycle method
+
+player.destroy(); // Lavalink extension tự động cleanup
 
 manager.on("lyricsCreate", (_player, track, result) => {
 	if (result.synced) {
@@ -72,6 +85,7 @@ manager.on("lyricsChange", async (_player, track, result) => {
 		// Fallback plain text chunk
 	}
 });
+
 manager.on("voiceCreate", async (plr, evt) => {
 	const userTag = evt.user?.tag || evt.userId;
 	const lowerContent = evt.content.toLowerCase();
@@ -87,13 +101,19 @@ const availableExtensions = [
 		features: ["Multi-language TTS", "Voice selection", "Ignore Bots", "Auto attach connection"],
 		color: "from-blue-500 to-cyan-500",
 	},
-
 	{
 		icon: Volume2,
 		title: "Lyrics Extension",
 		description: "Hiển thị lyrics tự động cho bài hát",
 		features: ["Auto-fetch lyrics", "Multiple sources", "Language support", "Embed display"],
 		color: "from-purple-500 to-pink-500",
+	},
+	{
+		icon: Music,
+		title: "Lavalink Extension",
+		description: "Kết nối với Lavalink server cho chất lượng âm thanh cao",
+		features: ["High quality audio", "Auto cleanup on destroy", "No auto-reconnect", "Resource management"],
+		color: "from-green-500 to-emerald-500",
 	},
 	{
 		icon: Zap,
@@ -248,11 +268,81 @@ export default function ExtensionsDocs() {
 								</div>
 							</motion.section>
 
-							{/* Creating Custom Extensions */}
+							{/* Lavalink Extension */}
 							<motion.section
 								initial={{ opacity: 0, y: 30 }}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.6, delay: 0.6 }}
+								className='glass-strong rounded-2xl p-8'>
+								<div className='flex items-center gap-3 mb-6'>
+									<div className='p-2 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/20'>
+										<Music className='w-6 h-6 text-green-400' />
+									</div>
+									<h2 className='text-2xl font-bold text-white'>Lavalink Extension</h2>
+								</div>
+
+								<p className='text-white/70 mb-6 text-lg'>
+									Lavalink extension cung cấp chất lượng âm thanh cao và quản lý kết nối tự động.
+								</p>
+
+								<CodeBlock
+									code={voiceExtensionCode}
+									language='typescript'
+									className='mb-8'
+								/>
+
+								<div className='grid md:grid-cols-2 gap-6'>
+									<div className='space-y-4'>
+										<h3 className='text-lg font-semibold text-white'>Tính năng chính</h3>
+										<ul className='space-y-2 text-white/70 text-sm'>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Chất lượng âm thanh cao</span>
+											</li>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Tự động cleanup khi destroy</span>
+											</li>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Không tự động kết nối lại</span>
+											</li>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Quản lý resources hiệu quả</span>
+											</li>
+										</ul>
+									</div>
+
+									<div className='space-y-4'>
+										<h3 className='text-lg font-semibold text-white'>Destroy Behavior</h3>
+										<ul className='space-y-2 text-white/70 text-sm'>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Ngắt kết nối hoàn toàn với Lavalink server</span>
+											</li>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Cleanup tất cả players và connections</span>
+											</li>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Không tự động kết nối lại</span>
+											</li>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Gọi onDestroy() lifecycle method</span>
+											</li>
+										</ul>
+									</div>
+								</div>
+							</motion.section>
+
+							{/* Creating Custom Extensions */}
+							<motion.section
+								initial={{ opacity: 0, y: 30 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.6, delay: 0.8 }}
 								className='glass-strong rounded-2xl p-8'>
 								<div className='flex items-center gap-3 mb-6'>
 									<div className='p-2 rounded-lg bg-gradient-to-br from-orange-500/20 to-red-500/20'>
