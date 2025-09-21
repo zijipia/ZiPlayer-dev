@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Sidebar } from "@/components/Sidebar";
 import { CodeBlock } from "@/components/CodeBlock";
 import { motion } from "framer-motion";
-import { Zap, Mic, Volume2, MessageSquare, CheckCircle, ArrowRight, Music, Code } from "lucide-react";
+import { Zap, Mic, Volume2, CheckCircle, ArrowRight, Music, Code } from "lucide-react";
 
 const extensionExampleCode = `import { BaseExtension } from "@ziplayer/extension";
 

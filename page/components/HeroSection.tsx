@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Play, Github, Star } from "lucide-react";
+import { ArrowRight, Play, Github, Star, ExternalLink, Package } from "lucide-react";
 import Link from "next/link";
 import { CodeBlock } from "./CodeBlock";
 import { Logo } from "./Logo";
@@ -108,6 +108,50 @@ export function HeroSection() {
 								<Github className='w-5 h-5' />
 								GitHub
 							</a>
+						</motion.div>
+
+						{/* NPM Packages */}
+						<motion.div
+							initial={{ opacity: 0, y: 20 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.6, delay: 0.55 }}
+							className='space-y-4'>
+							<div className='flex items-center gap-2 text-white/60 text-sm'>
+								<Package className='w-4 h-4' />
+								<span>Available on NPM</span>
+							</div>
+
+							<div className='flex flex-wrap gap-3'>
+								<a
+									href='https://www.npmjs.com/package/ziplayer'
+									target='_blank'
+									rel='noopener noreferrer'
+									className='group flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 hover:border-blue-400/40 hover:bg-blue-500/20 transition-all duration-300'>
+									<Package className='w-4 h-4 text-blue-400 group-hover:text-blue-300' />
+									<span className='text-sm font-medium text-white group-hover:text-blue-300'>ziplayer</span>
+									<ExternalLink className='w-3 h-3 text-white/40 group-hover:text-blue-400' />
+								</a>
+
+								<a
+									href='https://www.npmjs.com/package/@ziplayer/plugin'
+									target='_blank'
+									rel='noopener noreferrer'
+									className='group flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 hover:border-green-400/40 hover:bg-green-500/20 transition-all duration-300'>
+									<Package className='w-4 h-4 text-green-400 group-hover:text-green-300' />
+									<span className='text-sm font-medium text-white group-hover:text-green-300'>@ziplayer/plugin</span>
+									<ExternalLink className='w-3 h-3 text-white/40 group-hover:text-green-400' />
+								</a>
+
+								<a
+									href='https://www.npmjs.com/package/@ziplayer/extension'
+									target='_blank'
+									rel='noopener noreferrer'
+									className='group flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 hover:border-purple-400/40 hover:bg-purple-500/20 transition-all duration-300'>
+									<Package className='w-4 h-4 text-purple-400 group-hover:text-purple-300' />
+									<span className='text-sm font-medium text-white group-hover:text-purple-300'>@ziplayer/extension</span>
+									<ExternalLink className='w-3 h-3 text-white/40 group-hover:text-purple-400' />
+								</a>
+							</div>
 						</motion.div>
 
 						{/* Stats */}

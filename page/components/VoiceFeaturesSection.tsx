@@ -138,7 +138,7 @@ const audioFeatures = [
 
 export function VoiceFeaturesSection() {
 	return (
-		<section className='py-20 relative bg-gradient-to-b from-black/20 to-transparent'>
+		<section className='py-20 relative'>
 			<div className='max-w-7xl mx-auto px-4'>
 				{/* Section header */}
 				<motion.div
