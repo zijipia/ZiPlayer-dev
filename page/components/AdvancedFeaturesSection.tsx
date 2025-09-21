@@ -106,7 +106,7 @@ guilds.forEach(guild => {
 
 export function AdvancedFeaturesSection() {
 	return (
-		<section className='py-20 relative bg-gradient-to-b from-transparent to-black/20'>
+		<section className='py-20 relative'>
 			<div className='max-w-7xl mx-auto px-4'>
 				{/* Section header */}
 				<motion.div
