@@ -1,6 +1,8 @@
 import { EventEmitter } from "events";
 import { Player } from "./Player";
 import { PlayerManagerOptions, PlayerOptions, Track, SourcePlugin, SearchResult } from "../types";
+import type { BaseExtension } from "../extensions";
+import { withTimeout } from "../utils/timeout";
 
 const GLOBAL_MANAGER_KEY: symbol = Symbol.for("ziplayer.PlayerManager.instance");
 export const getGlobalManager = (): PlayerManager | null => {
@@ -23,15 +25,49 @@ const setGlobalManager = (instance: PlayerManager): void => {
 	}
 };
 
+/**
+ * The main class for managing players across multiple Discord guilds.
+ *
+ * @example
+ * // Basic setup with plugins and extensions
+ * const manager = new PlayerManager({
+ *   plugins: [
+ *     new YouTubePlugin(),
+ *     new SoundCloudPlugin(),
+ *     new SpotifyPlugin(),
+ *     new TTSPlugin({ defaultLang: "en" })
+ *   ],
+ *   extensions: [
+ *     new voiceExt(null, { lang: "en-US" }),
+ *     new lavalinkExt(null, {
+ *       nodes: [{ host: "localhost", port: 2333, password: "youshallnotpass" }]
+ *     })
+ *   ],
+ *   extractorTimeout: 10000
+ * });
+ *
+ * // Create a player for a guild
+ * const player = await manager.create(guildId, {
+ *   tts: { interrupt: true, volume: 1 },
+ *   leaveOnEnd: true,
+ *   leaveTimeout: 30000
+ * });
+ *
+ * // Get existing player
+ * const existingPlayer = manager.get(guildId);
+ * if (existingPlayer) {
+ *   await existingPlayer.play("Never Gonna Give You Up", userId);
+ * }
+ */
 export class PlayerManager extends EventEmitter {
 	private static instance: PlayerManager | null = null;
 	private players: Map<string, Player> = new Map();
-	static default(opt?: PlayerOptions): Player {
+	static async default(opt?: PlayerOptions): Promise<Player> {
 		let globaldef = getGlobalManager();
 		if (!globaldef) {
 			globaldef = new PlayerManager({});
 		}
-		return globaldef.create("default", opt);
+		return await globaldef.create("default", opt);
 	}
 	private plugins: SourcePlugin[];
 	private extensions: any[];
@@ -79,7 +115,42 @@ export class PlayerManager extends EventEmitter {
 		throw new Error("Invalid guild or guildId provided.");
 	}
 
-	create(guildOrId: string | { id: string }, options?: PlayerOptions): Player {
+	/**
+	 * Create a new player for a guild
+	 *
+	 * @param {string | {id: string}} guildOrId - Guild ID or guild object
+	 * @param {PlayerOptions} options - Player configuration options
+	 * @returns {Promise<Player>} The created player instance
+	 *
+	 * @example
+	 * // Create player with basic options
+	 * const player = await manager.create(guildId, {
+	 *   tts: { interrupt: true, volume: 1 },
+	 *   leaveOnEnd: true,
+	 *   leaveTimeout: 30000
+	 * });
+	 *
+	 * // Create player with advanced options
+	 * const advancedPlayer = await manager.create(guild, {
+	 *   volume: 0.8,
+	 *   quality: "high",
+	 *   selfDeaf: false,
+	 *   selfMute: false,
+	 *   tts: {
+	 *     createPlayer: true,
+	 *     interrupt: true,
+	 *     volume: 1.0,
+	 *     Max_Time_TTS: 30000
+	 *   },
+	 *   userdata: { customData: "example" }
+	 * });
+	 *
+	 * // Connect and play immediately
+	 * await player.connect(voiceChannel);
+	 * await player.play("Never Gonna Give You Up", userId);
+	 */
+
+	async create(guildOrId: string | { id: string }, options?: PlayerOptions): Promise<Player> {
 		const guildId = this.resolveGuildId(guildOrId);
 		if (this.players.has(guildId)) {
 			return this.players.get(guildId)!;
@@ -116,13 +187,25 @@ export class PlayerManager extends EventEmitter {
 				}
 			}
 			if (instance && typeof instance === "object") {
-				if ("player" in instance && !instance.player) instance.player = player;
-				if (typeof instance.active === "function") {
+				const extInstance = instance as BaseExtension;
+				if ("player" in extInstance && !extInstance.player) extInstance.player = player;
+				player.attachExtension(extInstance);
+				if (typeof extInstance.active === "function") {
+					let activated: boolean | void = true;
 					try {
-						instance.active({ manager: this, player });
-						this.debug(`[PlayerManager] Extension ${instance?.name} active`);
+						activated = await withTimeout(
+							Promise.resolve(extInstance.active({ manager: this, player })),
+							player.options.extractorTimeout ?? 15000,
+							`Extension ${extInstance?.name} activation timed out`,
+						);
+						this.debug(`[PlayerManager] Extension ${extInstance?.name} active`);
 					} catch (e) {
+						activated = false;
 						this.debug(`[PlayerManager] Extension activation error:`, e);
+					}
+					if (activated === false) {
+						player.detachExtension(extInstance);
+						continue;
 					}
 				}
 			}
@@ -158,15 +241,90 @@ export class PlayerManager extends EventEmitter {
 		return player;
 	}
 
+	/**
+	 * Get an existing player for a guild
+	 *
+	 * @param {string | {id: string}} guildOrId - Guild ID or guild object
+	 * @returns {Player | undefined} The player instance or undefined if not found
+	 * @example
+	 * // Get player by guild ID
+	 * const player = manager.get(guildId);
+	 * if (player) {
+	 *   await player.play("Never Gonna Give You Up", userId);
+	 * } else {
+	 *   console.log("No player found for this guild");
+	 * }
+	 *
+	 * // Get player by guild object
+	 * const playerFromGuild = manager.get(guild);
+	 * if (playerFromGuild) {
+	 *   playerFromGuild.setVolume(0.5);
+	 * }
+	 *
+	 * // Check if player exists before using
+	 * const existingPlayer = manager.get(guildId);
+	 * if (existingPlayer && existingPlayer.playing) {
+	 *   existingPlayer.pause();
+	 * }
+	 */
+
 	get(guildOrId: string | { id: string }): Player | undefined {
 		const guildId = this.resolveGuildId(guildOrId);
 		return this.players.get(guildId);
 	}
 
+	/**
+	 * Get an existing player for a guild
+	 *
+	 * @param {string | {id: string}} guildOrId - Guild ID or guild object
+	 * @returns {Player | undefined} The player instance or undefined
+	 * @example
+	 * const player = manager.get(guildId);
+	 * if (player) {
+	 *   await player.play("song name", userId);
+	 * }
+	 */
+	getPlayer(guildOrId: string | { id: string }): Player | undefined {
+		const guildId = this.resolveGuildId(guildOrId);
+		return this.players.get(guildId);
+	}
+
+	/**
+	 * Get all players
+	 *
+	 * @returns {Player[]} All player instances
+	 * @example
+	 * const players = manager.getall();
+	 * console.log(`Players: ${players.length}`);
+	 */
 	getall(): Player[] | [] {
 		return Array.from(this.players.values());
 	}
 
+	/**
+	 * Destroy a player and clean up resources
+	 *
+	 * @param {string | {id: string}} guildOrId - Guild ID or guild object
+	 * @returns {boolean} True if player was destroyed, false if not found
+	 * @example
+	 * // Destroy player by guild ID
+	 * const destroyed = manager.delete(guildId);
+	 * if (destroyed) {
+	 *   console.log("Player destroyed successfully");
+	 * } else {
+	 *   console.log("No player found to destroy");
+	 * }
+	 *
+	 * // Destroy player by guild object
+	 * const destroyedFromGuild = manager.delete(guild);
+	 * console.log(`Player destroyed: ${destroyedFromGuild}`);
+	 *
+	 * // Clean up all players
+	 * for (const [guildId, player] of manager.players) {
+	 *   const destroyed = manager.delete(guildId);
+	 *   console.log(`Destroyed player for ${guildId}: ${destroyed}`);
+	 * }
+	 */
 	delete(guildOrId: string | { id: string }): boolean {
 		const guildId = this.resolveGuildId(guildOrId);
 		const player = this.players.get(guildId);
@@ -178,6 +336,15 @@ export class PlayerManager extends EventEmitter {
 		return false;
 	}
 
+	/**
+	 * Check if a player exists for a guild
+	 *
+	 * @param {string | {id: string}} guildOrId - Guild ID or guild object
+	 * @returns {boolean} True if player exists, false if not
+	 * @example
+	 * const exists = manager.has(guildId);
+	 * console.log(`Player exists: ${exists}`);
+	 */
 	has(guildOrId: string | { id: string }): boolean {
 		const guildId = this.resolveGuildId(guildOrId);
 		return this.players.has(guildId);
@@ -190,7 +357,14 @@ export class PlayerManager extends EventEmitter {
 	get debugEnabled(): boolean {
 		return this.B_debug;
 	}
-
+	/**
+	 * Destroy all players
+	 *
+	 * @returns {void}
+	 * @example
+	 * manager.destroy();
+	 * console.log(`All players destroyed`);
+	 */
 	destroy(): void {
 		this.debug(`[PlayerManager] Destroying all players`);
 		for (const player of this.players.values()) {
@@ -202,6 +376,13 @@ export class PlayerManager extends EventEmitter {
 
 	/**
 	 * Search using registered plugins without creating a Player.
+	 *
+	 * @param {string} query - The query to search for
+	 * @param {string} requestedBy - The user ID who requested the search
+	 * @returns {Promise<SearchResult>} The search result
+	 * @example
+	 * const result = await manager.search("Never Gonna Give You Up", userId);
+	 * console.log(`Search result: ${result.tracks.length} tracks`);
 	 */
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		this.debug(`[PlayerManager] Search called with query: ${query}, requestedBy: ${requestedBy}`);

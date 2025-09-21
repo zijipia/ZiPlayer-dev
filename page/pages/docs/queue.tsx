@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Sidebar } from "@/components/Sidebar";
 import { CodeBlock } from "@/components/CodeBlock";
 import { motion } from "framer-motion";
-import { List, Play, Pause, SkipForward, Shuffle, Repeat, Volume2, CheckCircle, ArrowRight, Info } from "lucide-react";
+import { List, Play, Pause, SkipForward, Shuffle, Repeat, Volume2, CheckCircle, ArrowRight, Info, Zap } from "lucide-react";
 
 const queueBasicsCode = `// Thêm bài hát vào queue
 await player.play("Song Name", userId);
@@ -19,7 +19,70 @@ for (const song of songs) {
 // Phát queue
 await player.play();`;
 
-const queueControlsCode = `// Điều khiển queue
+const queueManagementCode = `// Quản lý queue
+// Thêm bài hát vào cuối queue
+await player.queue.add(track, userId);
+
+// Thêm nhiều bài hát cùng lúc
+await player.queue.addMultiple(tracks, userId);
+
+// Chèn bài hát vào vị trí cụ thể (0 = bài tiếp theo)
+await player.queue.insert(track, 0, userId);
+
+// Xóa bài hát khỏi queue
+const removedTrack = player.queue.remove(2); // Xóa bài ở vị trí 2
+
+// Lấy thông tin queue
+console.log("Queue size:", player.queue.size);
+console.log("Is empty:", player.queue.isEmpty);
+console.log("Current track:", player.queue.currentTrack);
+console.log("Next track:", player.queue.nextTrack);
+
+// Xóa toàn bộ queue
+player.queue.clear();`;
+
+const playbackControlsCode = `// Điều khiển phát nhạc
+// Skip bài hiện tại
+player.queue.skip();
+
+// Bật/tắt auto play
+player.queue.autoPlay(true);
+
+// Các chế độ lặp
+player.queue.loop("off");    // Không lặp
+player.queue.loop("track");  // Lặp bài hiện tại
+player.queue.loop("queue");  // Lặp toàn bộ queue
+
+// Xáo trộn queue
+player.queue.shuffle();
+
+// Lấy danh sách bài hát
+const allTracks = player.queue.getTracks();
+const specificTrack = player.queue.getTrack(3); // Lấy bài ở vị trí 3`;
+
+const queueEventsCode = `// Lắng nghe events của queue
+player.on("queueAdd", (track) => {
+  console.log("Đã thêm:", track.title);
+});
+
+player.on("queueAddList", (tracks) => {
+  console.log("Đã thêm playlist:", tracks.length, "bài hát");
+});
+
+player.on("queueRemove", (track, index) => {
+  console.log("Đã xóa:", track.title, "tại vị trí", index);
+});
+
+player.on("willPlay", (track, upcomingTracks) => {
+  console.log("Sắp phát:", track.title);
+  console.log("Còn lại:", upcomingTracks.length, "bài hát");
+});
+
+player.on("queueEnd", () => {
+  console.log("Hết queue!");
+});`;
+
+const queueControlsCode = `// API Methods của Queue
 player.queue:
 	add(track: Track): void 
 	addMultiple(tracks: Track[]): void 
@@ -152,6 +215,92 @@ export default function QueueDocs() {
 									language='typescript'
 									className='mb-8'
 								/>
+							</motion.section>
+
+							{/* Queue Management */}
+							<motion.section
+								initial={{ opacity: 0, y: 30 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.6, delay: 0.5 }}
+								className='glass-strong rounded-2xl p-8'>
+								<div className='flex items-center gap-3 mb-6'>
+									<div className='p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20'>
+										<Play className='w-6 h-6 text-purple-400' />
+									</div>
+									<h2 className='text-2xl font-bold text-white'>Queue Management</h2>
+								</div>
+
+								<p className='text-white/70 mb-6 text-lg'>
+									Quản lý queue với các phương thức thêm, xóa, chèn và lấy thông tin bài hát.
+								</p>
+
+								<CodeBlock
+									code={queueManagementCode}
+									language='typescript'
+									className='mb-8'
+								/>
+							</motion.section>
+
+							{/* Playback Controls */}
+							<motion.section
+								initial={{ opacity: 0, y: 30 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.6, delay: 0.6 }}
+								className='glass-strong rounded-2xl p-8'>
+								<div className='flex items-center gap-3 mb-6'>
+									<div className='p-2 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/20'>
+										<SkipForward className='w-6 h-6 text-green-400' />
+									</div>
+									<h2 className='text-2xl font-bold text-white'>Playback Controls</h2>
+								</div>
+
+								<p className='text-white/70 mb-6 text-lg'>
+									Điều khiển phát nhạc với các tính năng skip, loop, shuffle và auto-play.
+								</p>
+
+								<CodeBlock
+									code={playbackControlsCode}
+									language='typescript'
+									className='mb-8'
+								/>
+							</motion.section>
+
+							{/* Queue Events */}
+							<motion.section
+								initial={{ opacity: 0, y: 30 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.6, delay: 0.7 }}
+								className='glass-strong rounded-2xl p-8'>
+								<div className='flex items-center gap-3 mb-6'>
+									<div className='p-2 rounded-lg bg-gradient-to-br from-orange-500/20 to-red-500/20'>
+										<Zap className='w-6 h-6 text-orange-400' />
+									</div>
+									<h2 className='text-2xl font-bold text-white'>Queue Events</h2>
+								</div>
+
+								<p className='text-white/70 mb-6 text-lg'>Lắng nghe các sự kiện của queue để tương tác và cập nhật UI.</p>
+
+								<CodeBlock
+									code={queueEventsCode}
+									language='typescript'
+									className='mb-8'
+								/>
+							</motion.section>
+
+							{/* API Reference */}
+							<motion.section
+								initial={{ opacity: 0, y: 30 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.6, delay: 0.8 }}
+								className='glass-strong rounded-2xl p-8'>
+								<div className='flex items-center gap-3 mb-6'>
+									<div className='p-2 rounded-lg bg-gradient-to-br from-indigo-500/20 to-purple-500/20'>
+										<Info className='w-6 h-6 text-indigo-400' />
+									</div>
+									<h2 className='text-2xl font-bold text-white'>API Reference</h2>
+								</div>
+
+								<p className='text-white/70 mb-6 text-lg'>Tất cả các phương thức và thuộc tính có sẵn trong Queue.</p>
 
 								<CodeBlock
 									code={queueControlsCode}

@@ -71,24 +71,28 @@ const eventTypes = [
 		title: "Playback Events",
 		description: "Theo dõi trạng thái phát nhạc",
 		events: ["trackStart", "trackEnd", "playerPause", "playerResume", "playerStop"],
+		color: "from-blue-500 to-cyan-500",
 	},
 	{
 		icon: SkipForward,
 		title: "Queue Events",
 		description: "Quản lý danh sách phát",
 		events: ["queueAdd", "queueRemove", "queueAddList", "willPlay", "queueEnd"],
+		color: "from-purple-500 to-pink-500",
 	},
 	{
 		icon: Volume2,
 		title: "Control Events",
 		description: "Điều khiển player",
 		events: ["volumeChange", "playerDestroy"],
+		color: "from-green-500 to-emerald-500",
 	},
 	{
 		icon: AlertTriangle,
 		title: "Error Events",
 		description: "Xử lý lỗi và sự cố",
 		events: ["playerError", "connectionError"],
+		color: "from-red-500 to-orange-500",
 	},
 ];
 
@@ -135,8 +139,8 @@ export default function EventsDocs() {
 										transition={{ duration: 0.5, delay: 0.3 + index * 0.1 }}
 										className='card-hover'>
 										<div className='flex flex-col items-center text-center space-y-4'>
-											<div className='p-4 rounded-2xl bg-gradient-to-br from-brand-500/20 to-brand-600/20'>
-												<type.icon className='w-8 h-8 text-brand-400' />
+											<div className={`p-4 rounded-2xl bg-gradient-to-br ${type.color}/20`}>
+												<type.icon className='w-8 h-8 text-white' />
 											</div>
 
 											<div className='space-y-2'>

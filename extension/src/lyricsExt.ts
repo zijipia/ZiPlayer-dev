@@ -1,33 +1,91 @@
 import { BaseExtension, Player, PlayerManager, Track } from "ziplayer";
 import axios from "axios";
 
+/**
+ * Configuration options for the lyrics extension.
+ */
 interface LyricsOptions {
+	/** Lyrics provider to use (default: "lrclib") */
 	provider?: "lrclib" | "lyricsovh";
-	includeSynced?: boolean; // prefer LRC if available
-	autoFetchOnTrackStart?: boolean; // auto-fetch when a new track starts
-	sanitizeTitle?: boolean; // clean noisy suffixes from titles
-	maxLength?: number; // trim extremely long lyrics
+	/** Whether to prefer LRC (synced) lyrics if available (default: true) */
+	includeSynced?: boolean;
+	/** Whether to automatically fetch lyrics when a track starts (default: true) */
+	autoFetchOnTrackStart?: boolean;
+	/** Whether to clean noisy suffixes from track titles (default: true) */
+	sanitizeTitle?: boolean;
+	/** Maximum length for lyrics text (default: 32000) */
+	maxLength?: number;
 }
 
+/**
+ * Result object containing lyrics information and metadata.
+ */
 export interface LyricsResult {
+	/** The provider that supplied the lyrics */
 	provider: "lrclib" | "lyricsovh";
-	source?: string; // human readable source
-	url?: string; // provider page if any
-	text?: string | null; // plain lyrics
-	synced?: string | null; // LRC if available
-	/** For per-line updates with synced lyrics */
+	/** Human-readable source name */
+	source?: string;
+	/** Provider page URL if available */
+	url?: string;
+	/** Plain lyrics text */
+	text?: string | null;
+	/** LRC (synced) lyrics if available */
+	synced?: string | null;
+	/** Current line for per-line updates with synced lyrics */
 	current?: string | null;
+	/** Previous line for per-line updates */
 	previous?: string | null;
+	/** Next line for per-line updates */
 	next?: string | null;
+	/** Current line index for synced lyrics */
 	lineIndex?: number;
+	/** Current time in milliseconds for synced lyrics */
 	timeMs?: number;
+	/** Track name as matched by the provider */
 	trackName?: string;
+	/** Artist name as matched by the provider */
 	artistName?: string;
+	/** Album name as matched by the provider */
 	albumName?: string;
+	/** How the match was made (e.g., "exact", "fuzzy") */
 	matchedBy?: string;
+	/** Language of the lyrics if detected */
 	lang?: string | null;
 }
 
+/**
+ * Lyrics extension for ZiPlayer that provides automatic lyrics fetching and synchronization.
+ *
+ * This extension automatically fetches and displays lyrics for playing tracks by:
+ * - Fetching lyrics from multiple providers (LRCLIB, Lyrics.ovh)
+ * - Supporting both plain text and LRC (synchronized) lyrics
+ * - Providing real-time line-by-line updates for synced lyrics
+ * - Automatically cleaning and sanitizing track titles for better matching
+ * - Emitting events for lyrics creation and updates
+ *
+ * @example
+ * const lyricsExt = new lyricsExt(null, {
+ *   provider: "lrclib",
+ *   includeSynced: true,
+ *   autoFetchOnTrackStart: true
+ * });
+ *
+ * // Add to PlayerManager
+ * const manager = new PlayerManager({
+ *   extensions: [lyricsExt]
+ * });
+ *
+ * // Listen for lyrics events
+ * manager.on("lyricsCreate", (player, track, lyrics) => {
+ *   console.log(`Lyrics for ${track.title}: ${lyrics.text}`);
+ * });
+ *
+ * manager.on("lyricsChange", (player, track, lyrics) => {
+ *   console.log(`Current line: ${lyrics.current}`);
+ * });
+ *
+ * @since 1.0.0
+ */
 export class lyricsExt extends BaseExtension {
 	name = "lyricsExt";
 	version = "1.0.0";
@@ -38,6 +96,26 @@ export class lyricsExt extends BaseExtension {
 	private schedules: Map<string, { timers: NodeJS.Timeout[]; startAt: number; lines: { timeMs: number; text: string }[] }> =
 		new Map();
 
+	/**
+	 * Creates a new lyrics extension instance.
+	 *
+	 * @param player - The player instance to attach to (optional, can be set later)
+	 * @param opts - Configuration options for lyrics fetching
+	 * @param opts.provider - Lyrics provider to use (default: "lrclib")
+	 * @param opts.includeSynced - Whether to prefer LRC lyrics (default: true)
+	 * @param opts.autoFetchOnTrackStart - Auto-fetch on track start (default: true)
+	 * @param opts.sanitizeTitle - Clean track titles (default: true)
+	 * @param opts.maxLength - Maximum lyrics length (default: 32000)
+	 *
+	 * @example
+	 * const lyricsExt = new lyricsExt(null, {
+	 *   provider: "lrclib",
+	 *   includeSynced: true,
+	 *   autoFetchOnTrackStart: true,
+	 *   sanitizeTitle: true,
+	 *   maxLength: 50000
+	 * });
+	 */
 	constructor(player: Player | null = null, opts?: Partial<LyricsOptions>) {
 		super();
 		this.player = player;
@@ -51,6 +129,23 @@ export class lyricsExt extends BaseExtension {
 		} as LyricsOptions;
 	}
 
+	/**
+	 * Activates the lyrics extension with the provided context.
+	 *
+	 * This method handles the activation process:
+	 * - Sets up the player and manager references
+	 * - Attaches track start event listeners for automatic lyrics fetching
+	 * - Sets up cleanup handlers for track end and player destroy events
+	 *
+	 * @param alas - Context object containing manager and player references
+	 * @returns `true` if activation was successful, `false` otherwise
+	 *
+	 * @example
+	 * const success = lyricsExt.active({
+	 *   manager: playerManager,
+	 *   player: playerInstance
+	 * });
+	 */
 	active(alas: any): boolean {
 		if (alas?.player && !this.player) this.player = alas.player;
 		const player = this.player;
@@ -119,6 +214,32 @@ export class lyricsExt extends BaseExtension {
 		return true;
 	}
 
+	/**
+	 * Fetches lyrics for a given track.
+	 *
+	 * This method attempts to fetch lyrics from configured providers:
+	 * - First tries LRCLIB with artist and title
+	 * - Falls back to LRCLIB with title only if no results
+	 * - Finally tries Lyrics.ovh as a last resort
+	 * - Supports both plain text and LRC (synchronized) lyrics
+	 *
+	 * @param track - The track to fetch lyrics for (uses current track if not provided)
+	 * @param override - Options to override for this specific fetch (optional)
+	 * @returns Lyrics result object, or null if no lyrics found
+	 *
+	 * @example
+	 * const lyrics = await lyricsExt.fetch(track, {
+	 *   provider: "lrclib",
+	 *   includeSynced: true
+	 * });
+	 *
+	 * if (lyrics) {
+	 *   console.log(`Found ${lyrics.provider} lyrics: ${lyrics.text}`);
+	 *   if (lyrics.synced) {
+	 *     console.log("Synced lyrics available!");
+	 *   }
+	 * }
+	 */
 	async fetch(track?: Track, override?: Partial<LyricsOptions>): Promise<LyricsResult | null> {
 		const use: LyricsOptions = { ...this.options, ...(override || {}) } as LyricsOptions;
 		if (!track) track = this.player?.currentTrack ?? (undefined as any);

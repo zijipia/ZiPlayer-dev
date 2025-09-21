@@ -6,7 +6,14 @@ import { CodeBlock } from "@/components/CodeBlock";
 import { motion } from "framer-motion";
 import { Download, Play, Settings, Zap, CheckCircle, ArrowRight, Copy } from "lucide-react";
 
-const installationCode = `npm install ziplayer @ziplayer/plugin @ziplayer/extension @discordjs/voice discord.js`;
+const installationCode = `# Cài đặt packages cơ bản
+npm install ziplayer @ziplayer/plugin @ziplayer/extension @discordjs/voice discord.js
+
+# Hoặc sử dụng yarn
+yarn add ziplayer @ziplayer/plugin @ziplayer/extension @discordjs/voice discord.js
+
+# Hoặc sử dụng pnpm
+pnpm add ziplayer @ziplayer/plugin @ziplayer/extension @discordjs/voice discord.js`;
 
 const managerCode = `import { PlayerManager } from "ziplayer";
 import { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin } from "@ziplayer/plugin";
@@ -21,7 +28,7 @@ const manager = new PlayerManager({
   extensions: [new voiceExt(null, { lang: "vi-VN" })],
 });`;
 
-const playerCode = `const player = manager.create(guildId, {
+const playerCode = `const player = await manager.create(guildId, {
   leaveOnEnd: true,
   leaveTimeout: 30000,
   userdata: { channel: textChannel },
@@ -240,6 +247,50 @@ export default function GettingStarted() {
 												Chỉ load các plugins cần thiết để tối ưu hóa hiệu suất và giảm memory usage.
 											</p>
 										</div>
+									</div>
+								</div>
+							</motion.section>
+
+							{/* Troubleshooting */}
+							<motion.section
+								initial={{ opacity: 0, y: 30 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.6, delay: 1.2 }}
+								className='glass-strong rounded-2xl p-8'>
+								<h2 className='text-2xl font-bold text-white mb-6 text-center'>🔧 Troubleshooting</h2>
+
+								<div className='space-y-6'>
+									<div className='border-l-4 border-yellow-500 pl-4'>
+										<h3 className='text-lg font-semibold text-white mb-2'>Bot không kết nối được voice channel</h3>
+										<p className='text-white/70 mb-2'>Kiểm tra các điều kiện sau:</p>
+										<ul className='text-white/70 text-sm space-y-1 ml-4'>
+											<li>• Bot có quyền kết nối voice channel</li>
+											<li>• Bot có quyền nói trong voice channel</li>
+											<li>• Voice channel không bị giới hạn</li>
+											<li>• Bot đã online và sẵn sàng</li>
+										</ul>
+									</div>
+
+									<div className='border-l-4 border-red-500 pl-4'>
+										<h3 className='text-lg font-semibold text-white mb-2'>Lỗi "No audio source found"</h3>
+										<p className='text-white/70 mb-2'>Có thể do:</p>
+										<ul className='text-white/70 text-sm space-y-1 ml-4'>
+											<li>• Plugin không được cài đặt đúng cách</li>
+											<li>• API key không hợp lệ (YouTube, Spotify)</li>
+											<li>• URL không được hỗ trợ bởi plugin</li>
+											<li>• Kết nối mạng có vấn đề</li>
+										</ul>
+									</div>
+
+									<div className='border-l-4 border-blue-500 pl-4'>
+										<h3 className='text-lg font-semibold text-white mb-2'>Bot bị crash khi phát nhạc</h3>
+										<p className='text-white/70 mb-2'>Thử các giải pháp:</p>
+										<ul className='text-white/70 text-sm space-y-1 ml-4'>
+											<li>• Thêm try-catch cho tất cả async operations</li>
+											<li>• Kiểm tra memory usage và cleanup players</li>
+											<li>• Cập nhật dependencies lên phiên bản mới nhất</li>
+											<li>• Kiểm tra logs để tìm lỗi cụ thể</li>
+										</ul>
 									</div>
 								</div>
 							</motion.section>

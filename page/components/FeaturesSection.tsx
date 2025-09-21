@@ -1,50 +1,95 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Zap, Puzzle, Settings, Shield, Code, Users, Music, BarChart3 } from "lucide-react";
+import {
+	Zap,
+	Puzzle,
+	Settings,
+	Shield,
+	Code,
+	Users,
+	Music,
+	BarChart3,
+	Mic,
+	Headphones,
+	MessageSquare,
+	Layers,
+	Volume2,
+	Brain,
+} from "lucide-react";
 import { FeatureCard } from "./FeatureCard";
 
 const features = [
 	{
 		icon: Puzzle,
 		title: "Plugin System",
-		description:
-			"Hệ thống plugin mạnh mẽ cho phép mở rộng chức năng một cách dễ dàng với YouTube, SoundCloud, Spotify và nhiều hơn nữa.",
+		description: "Powerful plugin system with YouTube, SoundCloud, Spotify, TTS and easy custom plugin creation.",
 	},
 	{
 		icon: Zap,
 		title: "High Performance",
-		description: "Được tối ưu hóa cho hiệu suất cao với TypeScript, hỗ trợ đa guild và xử lý hàng nghìn yêu cầu đồng thời.",
+		description:
+			"Optimized for high performance with TypeScript, multi-guild support and handling thousands of concurrent requests.",
 	},
 	{
 		icon: Settings,
 		title: "Rich Controls",
-		description: "Điều khiển queue phong phú với auto-play, shuffle, repeat, volume control và nhiều tính năng nâng cao khác.",
+		description: "Rich queue controls with auto-play, shuffle, repeat, volume control and many other advanced features.",
 	},
 	{
 		icon: Shield,
 		title: "Production Ready",
-		description: "Sẵn sàng cho production với error handling, logging, monitoring và các tính năng bảo mật hàng đầu.",
+		description: "Production ready with error handling, logging, monitoring and top-tier security features.",
 	},
 	{
 		icon: Code,
 		title: "Developer Friendly",
-		description: "API đơn giản, documentation chi tiết, TypeScript support và cộng đồng hỗ trợ tích cực.",
+		description: "Simple API, detailed documentation, TypeScript support and active community support.",
 	},
 	{
 		icon: Users,
 		title: "Multi-Guild Support",
-		description: "Hỗ trợ đa guild với quản lý player riêng biệt cho từng server, không xung đột dữ liệu.",
+		description: "Multi-guild support with separate player management for each server, no data conflicts.",
 	},
 	{
 		icon: Music,
 		title: "Audio Quality",
-		description: "Chất lượng âm thanh cao với hỗ trợ nhiều format, bitrate tối ưu và xử lý audio chuyên nghiệp.",
+		description: "High audio quality with multiple format support, optimized bitrate and professional audio processing.",
 	},
 	{
 		icon: BarChart3,
 		title: "Analytics & Monitoring",
-		description: "Theo dõi hiệu suất, thống kê sử dụng và monitoring real-time để tối ưu hóa trải nghiệm người dùng.",
+		description: "Performance tracking, usage statistics and real-time monitoring to optimize user experience.",
+	},
+	{
+		icon: Mic,
+		title: "Voice Commands",
+		description: "Control bot with voice using Speech-to-Text, multi-language support and accurate recognition.",
+	},
+	{
+		icon: Headphones,
+		title: "Lavalink Support",
+		description: "Lavalink server support with automatic node management, load balancing and high scalability.",
+	},
+	{
+		icon: MessageSquare,
+		title: "TTS Integration",
+		description: "Text-to-Speech integration with interrupt mode, play notifications without interrupting music.",
+	},
+	{
+		icon: Layers,
+		title: "Lyrics Display",
+		description: "Automatic lyrics search and display, multiple provider support and LRC format.",
+	},
+	{
+		icon: Volume2,
+		title: "Advanced Audio",
+		description: "Advanced audio processing with multiple source support, automatic fallback and quality optimization.",
+	},
+	{
+		icon: Brain,
+		title: "Modular Architecture",
+		description: "Modular architecture with extension system, easy to extend and customize according to needs.",
 	},
 ];
 
@@ -60,17 +105,17 @@ export function FeaturesSection() {
 					transition={{ duration: 0.6 }}
 					className='text-center mb-16'>
 					<h2 className='text-4xl lg:text-5xl font-bold mb-6'>
-						<span className='text-white'>Tại sao chọn </span>
+						<span className='text-white'>Why choose </span>
 						<span className='gradient-text'>ZiPlayer?</span>
 					</h2>
 					<p className='text-xl text-white/70 max-w-3xl mx-auto leading-relaxed'>
-						ZiPlayer được thiết kế để mang lại trải nghiệm âm nhạc Discord tốt nhất với công nghệ tiên tiến và giao diện thân
-						thiện.
+						ZiPlayer is designed to deliver the best Discord music experience with cutting-edge technology and user-friendly
+						interface.
 					</p>
 				</motion.div>
 
 				{/* Features grid */}
-				<div className='grid md:grid-cols-2 lg:grid-cols-4 gap-6'>
+				<div className='grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
 					{features.map((feature, index) => (
 						<FeatureCard
 							key={feature.title}
@@ -90,13 +135,13 @@ export function FeaturesSection() {
 					transition={{ duration: 0.6, delay: 0.3 }}
 					className='text-center mt-16'>
 					<div className='glass-strong rounded-2xl p-8 max-w-2xl mx-auto'>
-						<h3 className='text-2xl font-bold text-white mb-4'>Sẵn sàng bắt đầu?</h3>
-						<p className='text-white/70 mb-6'>Khám phá tài liệu chi tiết và bắt đầu xây dựng bot Discord của bạn ngay hôm nay.</p>
+						<h3 className='text-2xl font-bold text-white mb-4'>Ready to get started?</h3>
+						<p className='text-white/70 mb-6'>Explore detailed documentation and start building your Discord bot today.</p>
 						<div className='flex flex-col sm:flex-row gap-4 justify-center'>
 							<a
 								href='/docs/getting-started'
 								className='btn-primary'>
-								Xem tài liệu
+								View Documentation
 							</a>
 							<a
 								href='https://github.com/ZiProject/ZiPlayer'

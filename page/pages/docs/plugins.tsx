@@ -45,7 +45,7 @@ const manager = new PlayerManager({
 });
 
 // Plugin sẽ tự động được sử dụng khi tìm kiếm
-const player = manager.create(guildId);
+const player = await manager.create(guildId);
 await player.play("tên bài hát", userId);`;
 
 const builtinPluginsCode = `import { 

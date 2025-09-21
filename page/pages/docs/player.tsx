@@ -22,7 +22,7 @@ const manager = new PlayerManager({
   leaveOnEmptyCooldown: 30000,
 });`;
 
-const createPlayerCode = `const player = manager.create(guildId, {
+const createPlayerCode = `const player = await manager.create(guildId, {
   // Cấu hình player
   leaveOnEnd: true,
   leaveTimeout: 30000,
@@ -51,13 +51,31 @@ player.pause();
 player.resume();
 player.stop();
 player.skip();
-player.loop("off); //"off" | "track" | "queue"
+player.loop("off"); //"off" | "track" | "queue"
 
 // Điều khiển volume
 player.setVolume(75);
 
 // Thoát khỏi voice channel
-player.destroy();`;
+player.destroy(); // Ngắt kết nối hoàn toàn, không tự kết nối lại`;
+
+const destroyPlayerCode = `// Destroy player - ngắt kết nối hoàn toàn
+player.destroy();
+
+// Khi destroy player:
+// 1. Dừng audio player
+// 2. Ngắt kết nối voice channel
+// 3. Xóa queue và plugins
+// 4. Gọi onDestroy() cho tất cả extensions
+// 5. Lavalink extension sẽ:
+//    - Ngắt kết nối hoàn toàn với Lavalink server
+//    - Không tự động kết nối lại
+//    - Cleanup tất cả resources
+// 6. Emit "playerDestroy" event
+// 7. Xóa tất cả event listeners
+
+// Lưu ý: Sau khi destroy, player không thể sử dụng lại
+// Cần tạo player mới nếu muốn phát nhạc lại`;
 
 const eventsCode = `// Lắng nghe events
 player.on("trackStart", (player, track) => {
@@ -282,6 +300,13 @@ export default function PlayerDocs() {
 									className='mb-8'
 								/>
 
+								<h3 className='text-xl font-semibold text-white mb-4'>Destroy Player</h3>
+								<CodeBlock
+									code={destroyPlayerCode}
+									language='typescript'
+									className='mb-8'
+								/>
+
 								<h3 className='text-xl font-semibold text-white mb-4'>Events</h3>
 								<CodeBlock
 									code={eventsCode}
@@ -318,6 +343,10 @@ export default function PlayerDocs() {
 												<CheckCircle className='w-5 h-5 text-green-400 flex-shrink-0 mt-0.5' />
 												<span>Xóa players không sử dụng bằng destroy()</span>
 											</li>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-5 h-5 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Destroy() ngắt kết nối hoàn toàn, không tự kết nối lại</span>
+											</li>
 										</ul>
 									</div>
 
@@ -335,6 +364,10 @@ export default function PlayerDocs() {
 											<li className='flex items-start gap-2'>
 												<CheckCircle className='w-5 h-5 text-green-400 flex-shrink-0 mt-0.5' />
 												<span>Lắng nghe error events để debug</span>
+											</li>
+											<li className='flex items-start gap-2'>
+												<CheckCircle className='w-5 h-5 text-green-400 flex-shrink-0 mt-0.5' />
+												<span>Lavalink extension tự động cleanup khi destroy</span>
 											</li>
 										</ul>
 									</div>

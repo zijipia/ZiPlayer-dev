@@ -1,6 +1,6 @@
 {
 	"name": "@ziplayer/plugin",
-	"version": "0.0.4",
+	"version": "0.1.0",
 	"description": "A modular Discord voice player with plugin system",
 	"keywords": [
 		"ZiPlayer",
@@ -30,7 +30,7 @@
 	"dependencies": {
 		"@zibot/scdl": "^0.0.5",
 		"@zibot/zitts": "^0.0.3",
-		"axios": "^1.11.0",
+		"axios": "^1.12.2",
 		"youtubei.js": "^15.0.1",
 		"ziplayer": "^0.0.6"
 	},

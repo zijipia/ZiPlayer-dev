@@ -4,6 +4,19 @@ const { Transform } = require("stream");
 const prism = require("prism-media");
 const axios = require("axios");
 
+/**
+ * Hook function called when a user starts speaking to adjust speech options.
+ *
+ * @param ctx - Context object containing user and session information
+ * @param ctx.userId - Discord user ID of the speaking user
+ * @param ctx.channelId - Discord channel ID where the user is speaking
+ * @param ctx.guildId - Discord guild ID where the user is speaking
+ * @param ctx.player - Player instance (may be null)
+ * @param ctx.manager - PlayerManager instance (optional)
+ * @param ctx.client - Discord client instance (optional)
+ * @param ctx.current - Current speech options
+ * @returns Partial speech options to override, or void
+ */
 type OnVoiceChangeHook = (ctx: {
 	userId: string;
 	channelId: string;
@@ -14,21 +27,36 @@ type OnVoiceChangeHook = (ctx: {
 	current: SpeechOptions;
 }) => Promise<Partial<SpeechOptions> | void> | Partial<SpeechOptions> | void;
 
+/**
+ * Configuration options for voice recognition and speech processing.
+ */
 interface SpeechOptions {
+	/** Whether to ignore bot users when processing voice */
 	ignoreBots: boolean;
+	/** Focus on a specific user ID (optional) */
 	focusUser?: string;
-	minimalVoiceMessageDuration: number; // seconds
+	/** Minimum duration in seconds for a voice message to be processed */
+	minimalVoiceMessageDuration: number;
+	/** Language code for speech recognition (e.g., "en-US", "vi-VN") */
 	lang: string;
+	/** Google Speech API key (optional, uses fallback if not provided) */
 	key?: string;
+	/** Whether to filter profanity in speech recognition results */
 	profanityFilter?: boolean;
-	// How long to wait after silence before sending to STT (ms)
+	/** How long to wait after silence before sending to STT (ms) */
 	postSilenceDelayMs?: number;
-	// Middleware-like hook to adjust options per speaking session
+	/** Middleware-like hook to adjust options per speaking session */
 	onVoiceChange?: OnVoiceChangeHook;
-	// Optional custom speech resolver; receives mono 48kHz 16-bit PCM
+	/** Optional custom speech resolver; receives mono 48kHz 16-bit PCM */
 	resolveSpeech?: (monoBuffer: Buffer, opts: SpeechOptions) => Promise<string> | string;
 }
 
+/**
+ * Transform stream for processing PCM audio data.
+ *
+ * This stream handles the conversion and buffering of PCM audio data
+ * for speech recognition processing.
+ */
 class PcmStream extends Transform {
 	private buffer: Buffer;
 	constructor(options?: any) {
@@ -54,6 +82,37 @@ class PcmStream extends Transform {
 	}
 }
 
+/**
+ * Voice extension for ZiPlayer that provides real-time speech recognition.
+ *
+ * This extension enables voice-to-text functionality by:
+ * - Listening to voice activity in Discord voice channels
+ * - Converting speech to text using Google Speech API
+ * - Supporting multiple languages and custom speech resolvers
+ * - Providing real-time voice event handling
+ * - Filtering and processing audio quality
+ *
+ * @example
+ * const voiceExt = new voiceExt(null, {
+ *   lang: "en-US",
+ *   ignoreBots: true,
+ *   minimalVoiceMessageDuration: 1,
+ *   client: discordClient
+ * });
+ *
+ * // Add to PlayerManager
+ * const manager = new PlayerManager({
+ *   extensions: [voiceExt]
+ * });
+ *
+ * // Listen for voice events
+ * manager.on("voiceCreate", (player, payload) => {
+ *   console.log(`${payload.userId} said: ${payload.content}`);
+ * });
+ *
+ * @since 1.0.0
+ *
+ */
 export class voiceExt extends BaseExtension {
 	name = "voiceExt";
 	version = "1.0.0";
@@ -66,6 +125,32 @@ export class voiceExt extends BaseExtension {
 	private _speakingAttached = false;
 	// private _activeSpeakers = new Set<string>();
 
+	/**
+	 * Creates a new voice extension instance.
+	 *
+	 * @param player - The player instance to attach to (optional, can be set later)
+	 * @param opts - Configuration options for voice recognition
+	 * @param opts.lang - Language code for speech recognition (default: "vi-VN")
+	 * @param opts.ignoreBots - Whether to ignore bot users (default: true)
+	 * @param opts.focusUser - Focus on a specific user ID (optional)
+	 * @param opts.minimalVoiceMessageDuration - Minimum voice duration in seconds (default: 1)
+	 * @param opts.profanityFilter - Whether to filter profanity (default: false)
+	 * @param opts.postSilenceDelayMs - Delay after silence before processing (default: 2000)
+	 * @param opts.key - Google Speech API key (optional)
+	 * @param opts.onVoiceChange - Hook to adjust options per session (optional)
+	 * @param opts.resolveSpeech - Custom speech resolver function (optional)
+	 * @param opts.client - Discord client instance (optional)
+	 *
+	 * @example
+	 * const voiceExt = new voiceExt(null, {
+	 *   lang: "en-US",
+	 *   ignoreBots: true,
+	 *   minimalVoiceMessageDuration: 2,
+	 *   profanityFilter: true,
+	 *   client: discordClient
+	 * });
+	 *
+	 */
 	constructor(player: Player | null = null, opts?: Partial<SpeechOptions> & { client?: any }) {
 		super();
 		this.player = player;
@@ -80,6 +165,26 @@ export class voiceExt extends BaseExtension {
 		} as SpeechOptions;
 	}
 
+	/**
+	 * Activates the voice extension with the provided context.
+	 *
+	 * This method handles the activation process:
+	 * - Sets up the player and manager references
+	 * - Binds the Discord client for voice events
+	 * - Wraps the player's connect method to auto-attach voice handling
+	 * - Attaches voice handling if already connected
+	 *
+	 * @param alas - Context object containing manager, client, and player references
+	 * @returns `true` if activation was successful, `false` otherwise
+	 *
+	 * @example
+	 * const success = voiceExt.active({
+	 *   manager: playerManager,
+	 *   client: discordClient,
+	 *   player: playerInstance
+	 * });
+	 *
+	 */
 	active(alas: any): boolean {
 		if (alas?.player && !this.player) this.player = alas.player;
 		const player = this.player;
@@ -114,6 +219,24 @@ export class voiceExt extends BaseExtension {
 		return true;
 	}
 
+	/**
+	 * Attaches voice recognition to a connected player.
+	 *
+	 * This method sets up voice recognition for a player that is already connected
+	 * to a voice channel. It configures the speaking event handlers and sets up
+	 * automatic cleanup when the player is destroyed.
+	 *
+	 * @param client - Discord client instance (optional, uses existing if not provided)
+	 * @param opts - Additional speech options to override (optional)
+	 * @throws {Error} If no connected player is available
+	 *
+	 * @example
+	 * voiceExt.attach(discordClient, {
+	 *   lang: "en-US",
+	 *   ignoreBots: false
+	 * });
+	 *
+	 */
 	attach(client?: any, opts?: Partial<SpeechOptions>) {
 		if (client) this.client = client;
 		if (opts) this.speechOptions = { ...this.speechOptions, ...opts } as SpeechOptions;
@@ -299,6 +422,25 @@ export class voiceExt extends BaseExtension {
 		}
 	}
 
+	/**
+	 * Resolves speech from audio buffer using the configured speech resolver.
+	 *
+	 * This method processes audio data and converts it to text using either:
+	 * - A custom speech resolver function (if provided)
+	 * - The built-in Google Speech API integration
+	 *
+	 * @param audioBuffer - PCM audio buffer to process
+	 * @param opts - Speech options to use (optional, uses instance options if not provided)
+	 * @returns Recognized speech text, or empty string if recognition failed
+	 *
+	 * @example
+	 * const text = await voiceExt.resolveSpeech(audioBuffer, {
+	 *   lang: "en-US",
+	 *   profanityFilter: true
+	 * });
+	 * console.log(`Recognized: ${text}`);
+	 *
+	 */
 	public async resolveSpeech(audioBuffer: Buffer, opts?: SpeechOptions): Promise<string> {
 		const use = opts ?? this.speechOptions;
 		const monoBuffer = this.convertStereoToMono(audioBuffer);

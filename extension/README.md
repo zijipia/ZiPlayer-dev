@@ -18,6 +18,54 @@ npm install ziplayer @ziplayer/plugin @discordjs/voice discord.js
 
 ## Current Features
 
+### Lavalink Process Extension
+
+Use `lavalinkExt` when you need ZiPlayer to manage an external Lavalink JVM node. The extension starts, stops, and optionally
+restarts the Lavalink jar and forwards lifecycle events through the manager/player.
+
+```ts
+import { PlayerManager } from "ziplayer";
+import { lavalinkExt } from "@ziplayer/extension";
+
+const lavalink = new lavalinkExt(null, {
+	nodes: [
+		{
+			identifier: "locallavalink",
+			password: "youshallnotpass",
+			host: "localhost",
+			port: 2333,
+			secure: false,
+		},
+	],
+	client: client,
+	searchPrefix: "scsearch",
+});
+
+const manager = new PlayerManager({
+	extensions: ["lavalinkExt"],
+});
+```
+
+### 3. Component Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   ZiPlayer      │    │  LavalinkExt     │    │  Lavalink v4    │
+│   Extension     │◄──►│  WebSocket       │◄──►│  Server         │
+│                 │    │  Handler         │    │                 │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Player        │    │  Node Manager    │    │  WebSocket      │
+│   Manager       │    │  - Connection    │    │  Events         │
+│                 │    │  - Reconnection  │    │  - Ready        │
+└─────────────────┘    │  - Stats Update  │    │  - Stats        │
+                       └──────────────────┘    │  - PlayerUpdate │
+                                               │  - Events       │
+                                               └─────────────────┘
+```
+
 ### voiceExt (Speech‑to‑Text)
 
 - Auto‑hooks into `player.connection.receiver` after you `connect()` to a voice channel.

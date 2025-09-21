@@ -5,7 +5,7 @@ import { Sidebar } from "./Sidebar";
 import { Logo } from "./Logo";
 import { PropsWithChildren, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Github, BookOpen, Home } from "lucide-react";
+import { Menu, X, Github, BookOpen, Home, Code } from "lucide-react";
 import { useRouter } from "next/router";
 
 export function Layout({ children }: PropsWithChildren) {
@@ -23,8 +23,9 @@ export function Layout({ children }: PropsWithChildren) {
 	}, []);
 
 	const navItems = [
-		{ href: "/", label: "Trang chủ", icon: Home },
-		{ href: "/docs", label: "Tài liệu", icon: BookOpen },
+		{ href: "/", label: "Home", icon: Home },
+		{ href: "/docs", label: "Documentation", icon: BookOpen },
+		{ href: "/api-reference", label: "API Reference", icon: Code },
 		{ href: "https://github.com/ZiProject/ZiPlayer", label: "GitHub", icon: Github, external: true },
 	];
 
@@ -142,35 +143,40 @@ export function Layout({ children }: PropsWithChildren) {
 								<span className='text-xl font-bold text-white'>ZiPlayer</span>
 							</div>
 							<p className='text-white/60 text-sm leading-relaxed'>
-								Discord audio player mạnh mẽ với hệ thống plugin linh hoạt và hiệu suất cao.
+								Powerful Discord audio player with flexible plugin system and high performance.
 							</p>
 						</div>
 
 						{/* Quick Links */}
 						<div className='space-y-4'>
-							<h3 className='text-white font-semibold'>Liên kết nhanh</h3>
+							<h3 className='text-white font-semibold'>Quick Links</h3>
 							<div className='space-y-2'>
 								<Link
 									href='/docs'
 									className='block text-white/60 hover:text-brand-300 transition-colors duration-200'>
-									Tài liệu
+									Documentation
 								</Link>
 								<Link
 									href='/docs/getting-started'
 									className='block text-white/60 hover:text-brand-300 transition-colors duration-200'>
-									Bắt đầu
+									Get Started
 								</Link>
 								<Link
 									href='/docs/examples'
 									className='block text-white/60 hover:text-brand-300 transition-colors duration-200'>
-									Ví dụ
+									Examples
+								</Link>
+								<Link
+									href='/api-reference'
+									className='block text-white/60 hover:text-brand-300 transition-colors duration-200'>
+									API Reference
 								</Link>
 							</div>
 						</div>
 
 						{/* Community */}
 						<div className='space-y-4'>
-							<h3 className='text-white font-semibold'>Cộng đồng</h3>
+							<h3 className='text-white font-semibold'>Community</h3>
 							<div className='space-y-2'>
 								<a
 									href='https://github.com/ZiProject/ZiPlayer'
@@ -191,25 +197,25 @@ export function Layout({ children }: PropsWithChildren) {
 
 						{/* Legal */}
 						<div className='space-y-4'>
-							<h3 className='text-white font-semibold'>Pháp lý</h3>
+							<h3 className='text-white font-semibold'>Legal</h3>
 							<div className='space-y-2'>
 								<Link
 									href='/privacy'
 									className='block text-white/60 hover:text-brand-300 transition-colors duration-200'>
-									Chính sách bảo mật
+									Privacy Policy
 								</Link>
 								<Link
 									href='/terms'
 									className='block text-white/60 hover:text-brand-300 transition-colors duration-200'>
-									Điều khoản sử dụng
+									Terms of Service
 								</Link>
 							</div>
 						</div>
 					</div>
 
 					<div className='border-t border-white/10 mt-8 pt-8 flex flex-col md:flex-row items-center justify-between'>
-						<span className='text-white/60 text-sm'>© {new Date().getFullYear()} ZiPlayer. Tất cả quyền được bảo lưu.</span>
-						<span className='text-white/60 text-sm mt-2 md:mt-0'>Được xây dựng với Next.js và ❤️</span>
+						<span className='text-white/60 text-sm'>© {new Date().getFullYear()} ZiPlayer. All rights reserved.</span>
+						<span className='text-white/60 text-sm mt-2 md:mt-0'>Built with Next.js and ❤️</span>
 					</div>
 				</div>
 			</motion.footer>

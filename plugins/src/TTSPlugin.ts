@@ -3,19 +3,26 @@ import { Readable } from "stream";
 import { getTTSUrls } from "@zibot/zitts";
 import axios from "axios";
 
+/**
+ * Configuration options for the TTSPlugin.
+ */
 export interface TTSPluginOptions {
-	defaultLang?: string; // e.g., "vi" | "en"
+	/** Default language code for TTS (e.g., "vi", "en", "en-US") */
+	defaultLang?: string;
+	/** Whether to use slow speech rate */
 	slow?: boolean;
 	/**
 	 * Optional custom TTS hook. If provided, it will be used to
 	 * create the audio stream for the given text instead of the
 	 * built-in Google TTS wrapper.
 	 *
-	 * Return one of:
+	 * @param text - The text to convert to speech
+	 * @param ctx - Context information including language, speed, and track
+	 * @returns One of:
 	 * - Node Readable (preferred)
 	 * - HTTP(S) URL string or URL object
 	 * - Buffer / Uint8Array / ArrayBuffer
-		\t * - Or an object with { stream, type } | { url, type }
+	 * - Or an object with { stream, type } | { url, type }
 	 */
 	createStream?: (
 		text: string,
@@ -30,17 +37,86 @@ export interface TTSPluginOptions {
 		| ArrayBuffer;
 }
 
+/**
+ * Internal configuration for TTS processing.
+ */
 interface TTSConfig {
+	/** The text to convert to speech */
 	text: string;
+	/** The language code for TTS */
 	lang: string;
+	/** Whether to use slow speech rate */
 	slow: boolean;
 }
 
+/**
+ * A plugin for Text-to-Speech (TTS) functionality.
+ *
+ * This plugin provides support for:
+ * - Converting text to speech using Google TTS
+ * - Custom TTS providers via the createStream hook
+ * - Multiple language support
+ * - Configurable speech rate (normal/slow)
+ * - TTS query parsing with language and speed options
+ *
+ * @example
+ * const ttsPlugin = new TTSPlugin({
+ *   defaultLang: "en",
+ *   slow: false
+ * });
+ *
+ * // Add to PlayerManager
+ * const manager = new PlayerManager({
+ *   plugins: [ttsPlugin]
+ * });
+ *
+ * // Search for TTS content
+ * const result = await ttsPlugin.search("tts:Hello world", "user123");
+ * const stream = await ttsPlugin.getStream(result.tracks[0]);
+ *
+ * @example
+ * // Custom TTS provider
+ * const customTTSPlugin = new TTSPlugin({
+ *   defaultLang: "en",
+ *   createStream: async (text, ctx) => {
+ *     // Custom TTS implementation
+ *     return customTTSProvider.synthesize(text, ctx.lang);
+ *   }
+ * });
+ *
+ * @since 1.0.0
+ */
 export class TTSPlugin extends BasePlugin {
 	name = "tts";
 	version = "1.0.0";
 	private opts: { defaultLang: string; slow: boolean; createStream?: TTSPluginOptions["createStream"] };
 
+	/**
+	 * Creates a new TTSPlugin instance.
+	 *
+	 * @param opts - Configuration options for the TTS plugin
+	 * @param opts.defaultLang - Default language code for TTS (default: "vi")
+	 * @param opts.slow - Whether to use slow speech rate (default: false)
+	 * @param opts.createStream - Optional custom TTS provider function
+	 *
+	 * @example
+	 * // Basic TTS with Vietnamese as default
+	 * const ttsPlugin = new TTSPlugin();
+	 *
+	 * // TTS with English as default and slow speech
+	 * const slowTTSPlugin = new TTSPlugin({
+	 *   defaultLang: "en",
+	 *   slow: true
+	 * });
+	 *
+	 * // TTS with custom provider
+	 * const customTTSPlugin = new TTSPlugin({
+	 *   defaultLang: "en",
+	 *   createStream: async (text, ctx) => {
+	 *     return await myCustomTTS.synthesize(text, ctx.lang);
+	 *   }
+	 * });
+	 */
 	constructor(opts?: TTSPluginOptions) {
 		super();
 		this.opts = {
@@ -50,12 +126,46 @@ export class TTSPlugin extends BasePlugin {
 		};
 	}
 
+	/**
+	 * Determines if this plugin can handle the given query.
+	 *
+	 * @param query - The search query to check
+	 * @returns `true` if the query starts with "tts:" or "say ", `false` otherwise
+	 *
+	 * @example
+	 * plugin.canHandle("tts:Hello world"); // true
+	 * plugin.canHandle("say Hello world"); // true
+	 * plugin.canHandle("youtube.com/watch?v=123"); // false
+	 */
 	canHandle(query: string): boolean {
 		if (!query) return false;
 		const q = query.trim().toLowerCase();
 		return q.startsWith("tts:") || q.startsWith("say ");
 	}
 
+	/**
+	 * Creates a TTS track from the given query.
+	 *
+	 * This method parses TTS queries and creates a track that can be played as audio.
+	 * It supports various query formats including language and speed specifications.
+	 *
+	 * @param query - The TTS query to process
+	 * @param requestedBy - The user ID who requested the TTS
+	 * @returns A SearchResult containing a single TTS track
+	 *
+	 * @example
+	 * // Basic TTS
+	 * const result = await plugin.search("tts:Hello world", "user123");
+	 *
+	 * // TTS with specific language
+	 * const result2 = await plugin.search("tts:en:Hello world", "user123");
+	 *
+	 * // TTS with language and slow speed
+	 * const result3 = await plugin.search("tts:en:true:Hello world", "user123");
+	 *
+	 * // Using "say" prefix
+	 * const result4 = await plugin.search("say Hello world", "user123");
+	 */
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		if (!this.canHandle(query)) {
 			return { tracks: [] };
@@ -79,6 +189,23 @@ export class TTSPlugin extends BasePlugin {
 		return { tracks: [track] };
 	}
 
+	/**
+	 * Generates an audio stream for a TTS track.
+	 *
+	 * This method converts the text in the track to speech using either the custom
+	 * TTS provider (if configured) or the built-in Google TTS service. It handles
+	 * various return types from custom providers and ensures proper stream formatting.
+	 *
+	 * @param track - The TTS track to convert to audio
+	 * @returns A StreamInfo object containing the audio stream
+	 * @throws {Error} If TTS generation fails or no audio URLs are returned
+	 *
+	 * @example
+	 * const track = { id: "tts-123", title: "TTS: Hello world", ... };
+	 * const streamInfo = await plugin.getStream(track);
+	 * console.log(streamInfo.type); // "arbitrary"
+	 * console.log(streamInfo.stream); // Readable stream with audio
+	 */
 	async getStream(track: Track): Promise<StreamInfo> {
 		const cfg = this.extractConfig(track);
 

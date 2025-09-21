@@ -7,19 +7,31 @@ import { CodeBlock } from "./CodeBlock";
 import { Logo } from "./Logo";
 
 const exampleCode = `import { PlayerManager } from "ziplayer";
-import { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin } from "@ziplayer/plugin";
+import { SoundCloudPlugin, YouTubePlugin, SpotifyPlugin, TTSPlugin } from "@ziplayer/plugin";
+import { voiceExt, lavalinkExt } from "@ziplayer/extension";
 
 const manager = new PlayerManager({
-  plugins: [new SoundCloudPlugin(), new YouTubePlugin(), new SpotifyPlugin()],
+  plugins: [
+    new TTSPlugin({ defaultLang: "en" }),
+    new YouTubePlugin(),
+    new SoundCloudPlugin(),
+    new SpotifyPlugin()
+  ],
+  extensions: [
+    new voiceExt(null, { lang: "en-US" }),
+    new lavalinkExt(null, { nodes: [...] })
+  ]
 });
 
-const player = manager.create(guildId, {
+const player = await manager.create(guildId, {
+  tts: { interrupt: true, volume: 1 },
   leaveOnEnd: true,
   leaveTimeout: 30000,
 });
 
 await player.connect(voiceChannel);
-await player.play("Never Gonna Give You Up", userId);`;
+await player.play("Never Gonna Give You Up", userId);
+await player.play("tts: Hello everyone!", userId);`;
 
 export function HeroSection() {
 	return (
@@ -71,8 +83,8 @@ export function HeroSection() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.4 }}
 							className='text-xl text-white/80 leading-relaxed max-w-lg'>
-							Modular Discord voice player với hệ thống plugin mạnh mẽ, điều khiển queue phong phú và ergonomics đã được kiểm
-							chứng.
+							Modular Discord voice player with powerful plugin system, voice commands, TTS integration, Lavalink support and many
+							other advanced features.
 						</motion.p>
 
 						{/* CTA Buttons */}
@@ -84,7 +96,7 @@ export function HeroSection() {
 							<Link
 								href='/docs/getting-started'
 								className='btn-primary group inline-flex items-center gap-2'>
-								Bắt đầu ngay
+								Get Started
 								<ArrowRight className='w-5 h-5 group-hover:translate-x-1 transition-transform duration-300' />
 							</Link>
 
@@ -109,8 +121,12 @@ export function HeroSection() {
 								<div className='text-sm text-white/60'>TypeScript</div>
 							</div>
 							<div className='text-center'>
-								<div className='text-2xl font-bold text-white'>50+</div>
+								<div className='text-2xl font-bold text-white'>4+</div>
 								<div className='text-sm text-white/60'>Plugins</div>
+							</div>
+							<div className='text-center'>
+								<div className='text-2xl font-bold text-white'>3+</div>
+								<div className='text-sm text-white/60'>Extensions</div>
 							</div>
 							<div className='text-center'>
 								<div className='text-2xl font-bold text-white'>∞</div>

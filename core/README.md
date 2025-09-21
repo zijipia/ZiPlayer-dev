@@ -17,6 +17,7 @@ A modular Discord voice player with plugin system for @discordjs/voice.
 - 🔔 **Event-driven** - Rich event system for all player actions
 - 🎭 **Multi-guild support** - Manage players across multiple Discord servers
 - 🗃️ **User data** - Attach custom data to each player for later use
+- 🔌 **Lavalink** - Support manage an external Lavalink JVM node
 
 ## Installation
 
@@ -120,41 +121,71 @@ Notes
 - For CPU-heavy TTS generation, consider offloading to `worker_threads` or a separate process and pass a stream/buffer to the
   plugin.
 
-## Creating Custom Plugins
+### Player Lifecycle Overview
 
-```typescript
-import { BasePlugin, Track, SearchResult, StreamInfo } from "ziplayer";
-
-export class MyPlugin extends BasePlugin {
-	name = "myplugin";
-	version = "1.0.0";
-
-	canHandle(query: string): boolean {
-		return query.includes("mysite.com");
-	}
-
-	async search(query: string, requestedBy: string): Promise<SearchResult> {
-		// Implement search logic
-		return {
-			tracks: [
-				/* ... */
-			],
-		};
-	}
-
-	async getStream(track: Track): Promise<StreamInfo> {
-		// Return audio stream
-		return { stream, type: "arbitrary" };
-	}
-}
+```
+PlayerManager.create(guild, opts)
+        │
+        ▼
+[Player constructor]
+ - setup event listeners
+ - freeze ExtensionContext { player, manager }
+ - register plugins
+        │
+        ▼
+attachExtension(ext)
+ - set ext.player
+ - ext.onRegister?(context)
+ - ext.active?(...) → false ⇒ detach
+        │
+        ▼
+player.play(query, by)
+ - runBeforePlayHooks → extensions may mutate query/tracks/start Lavalink
+ - resolve track list / queue updates / TTS interrupt check
+ - extensionsProvideStream → extension stream overrides plugin pipeline
+ - plugin.getStream / getFallback
+        │
+        ▼
+Audio playback
+ - trackStart / queue events emitted
+ - runAfterPlayHooks with final outcome
+        │
+        ▼
+player.destroy()
+ - stop audio/voice / clear queue & plugins
+ - ext.onDestroy?(context) for each attached extension
+ - emit playerDestroy & cleanup references
 ```
 
-## Progress Bar
+This diagram shows how custom extensions (voice, lyrics, Lavalink, etc.) integrate across the full player lifecycle and where
+their hooks are invoked.
 
-Display the current playback progress with `getProgressBar`:
+### Lavalink Process
 
-```typescript
-console.log(player.getProgressBar({ size: 30, barChar: "-", progressChar: "🔘" }));
+Use `lavalinkExt` when you need ZiPlayer to manage an external Lavalink JVM node. The extension starts, stops, and optionally
+restarts the Lavalink jar and forwards lifecycle events through the manager/player.
+
+```ts
+import { PlayerManager } from "ziplayer";
+import { lavalinkExt } from "@ziplayer/extension";
+
+const lavalink = new lavalinkExt(null, {
+	nodes: [
+		{
+			identifier: "locallavalink",
+			password: "youshallnotpass",
+			host: "localhost",
+			port: 2333,
+			secure: false,
+		},
+	],
+	client: client,
+	searchPrefix: "scsearch",
+});
+
+const manager = new PlayerManager({
+	extensions: ["lavalinkExt"],
+});
 ```
 
 ## Events

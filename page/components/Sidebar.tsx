@@ -24,6 +24,10 @@ const sections = [
 			{ href: "/docs/examples", label: "Examples" },
 		],
 	},
+	{
+		title: "Reference",
+		links: [{ href: "/api-reference", label: "API Reference" }],
+	},
 ];
 
 export function Sidebar() {
