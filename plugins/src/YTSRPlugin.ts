@@ -281,11 +281,30 @@ export class YTSRPlugin extends BasePlugin {
 	 * @returns Track object
 	 */
 	private buildTrackFromVideo(video: Video, requestedBy: string): Track {
+		// Xử lý duration một cách an toàn
+		let duration = 0;
+		if (video.duration) {
+			if (typeof video.duration === "number") {
+				duration = video.duration;
+			} else if (typeof video.duration === "object" && video.duration !== null) {
+				// Nếu duration là object, thử lấy seconds
+				duration = (video.duration as any)?.seconds || (video.duration as any)?.totalSeconds || 0;
+			}
+		}
+
+		// youtube-sr trả về duration theo milliseconds, chuyển thành seconds
+		if (duration > 0) {
+			// Nếu duration lớn hơn 1000, có thể là milliseconds
+			if (duration > 1000) {
+				duration = Math.floor(duration / 1000);
+			}
+		}
+
 		return {
 			id: video.id,
 			title: video.title,
 			url: video.url,
-			duration: typeof video.duration === "number" ? video.duration : (video.duration as any)?.seconds || 0,
+			duration: Math.max(0, duration), // Đảm bảo duration không âm
 			thumbnail: video.thumbnail?.url || (video as any).thumbnails?.[0]?.url,
 			requestedBy,
 			source: this.name,

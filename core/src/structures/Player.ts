@@ -103,6 +103,11 @@ export class Player extends EventEmitter {
 	private readonly PLUGIN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 	private pluginCacheTimestamps = new Map<string, number>();
 
+	// Cache for search results to avoid duplicate calls
+	private searchCache = new Map<string, SearchResult>();
+	private readonly SEARCH_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+	private searchCacheTimestamps = new Map<string, number>();
+
 	/**
 	 * Attach an extension to the player
 	 *
@@ -559,35 +564,70 @@ export class Player extends EventEmitter {
 	 */
 	async search(query: string, requestedBy: string): Promise<SearchResult> {
 		this.debug(`[Player] Search called with query: ${query}, requestedBy: ${requestedBy}`);
+
+		// Clear expired search cache periodically
+		if (Math.random() < 0.1) {
+			// 10% chance to clean cache
+			this.clearExpiredSearchCache();
+		}
+
+		// Check cache first
+		const cachedResult = this.getCachedSearchResult(query);
+		if (cachedResult) {
+			return cachedResult;
+		}
+
+		// Try extensions first
 		const extensionResult = await this.extensionsProvideSearch(query, requestedBy);
 		if (extensionResult && Array.isArray(extensionResult.tracks) && extensionResult.tracks.length > 0) {
 			this.debug(`[Player] Extension handled search for query: ${query}`);
+			this.cacheSearchResult(query, extensionResult);
 			return extensionResult;
 		}
-		const plugins = this.pluginManager.getAll();
+
+		// Get plugins and filter out TTS for regular searches
+		const allPlugins = this.pluginManager.getAll();
+		const plugins = allPlugins.filter((p) => {
+			// Skip TTS plugin for regular searches (unless query starts with "tts:")
+			if (p.name.toLowerCase() === "tts" && !query.toLowerCase().startsWith("tts:")) {
+				this.debug(`[Player] Skipping TTS plugin for regular search: ${query}`);
+				return false;
+			}
+			return true;
+		});
+
+		this.debug(`[Player] Using ${plugins.length} plugins for search (filtered from ${allPlugins.length})`);
+
 		let lastError: any = null;
+		let searchAttempts = 0;
 
 		for (const p of plugins) {
+			searchAttempts++;
 			try {
-				this.debug(`[Player] Trying plugin for search: ${p.name}`);
+				this.debug(`[Player] Trying plugin for search: ${p.name} (attempt ${searchAttempts}/${plugins.length})`);
+				const startTime = Date.now();
 				const res = await withTimeout(
 					p.search(query, requestedBy),
 					this.options.extractorTimeout ?? 15000,
 					`Search operation timed out for ${p.name}`,
 				);
+				const duration = Date.now() - startTime;
+
 				if (res && Array.isArray(res.tracks) && res.tracks.length > 0) {
-					this.debug(`[Player] Plugin '${p.name}' returned ${res.tracks.length} tracks`);
+					this.debug(`[Player] Plugin '${p.name}' returned ${res.tracks.length} tracks in ${duration}ms`);
+					this.cacheSearchResult(query, res);
 					return res;
 				}
-				this.debug(`[Player] Plugin '${p.name}' returned no tracks`);
+				this.debug(`[Player] Plugin '${p.name}' returned no tracks in ${duration}ms`);
 			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				this.debug(`[Player] Search via plugin '${p.name}' failed: ${errorMessage}`);
 				lastError = error;
-				this.debug(`[Player] Search via plugin '${p.name}' failed:`, error);
 				// Continue to next plugin
 			}
 		}
 
-		this.debug(`[Player] No plugins returned results for query: ${query}`);
+		this.debug(`[Player] No plugins returned results for query: ${query} (tried ${searchAttempts} plugins)`);
 		if (lastError) this.emit("playerError", lastError as Error);
 		throw new Error(`No plugin found to handle: ${query}`);
 	}
@@ -889,6 +929,126 @@ export class Player extends EventEmitter {
 			size: this.pluginCache.size,
 			hitRate: 0, // Would need to track hits/misses to calculate this
 			expiredEntries,
+		};
+	}
+
+	/**
+	 * Get cached search result or null if not found/expired
+	 * @param query The search query
+	 * @returns Cached search result or null
+	 */
+	private getCachedSearchResult(query: string): SearchResult | null {
+		const cacheKey = query.toLowerCase().trim();
+		const now = Date.now();
+
+		const cachedTimestamp = this.searchCacheTimestamps.get(cacheKey);
+		if (cachedTimestamp && now - cachedTimestamp < this.SEARCH_CACHE_TTL) {
+			const cachedResult = this.searchCache.get(cacheKey);
+			if (cachedResult) {
+				this.debug(`[SearchCache] Using cached search result for: ${query}`);
+				return cachedResult;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Cache search result
+	 * @param query The search query
+	 * @param result The search result to cache
+	 */
+	private cacheSearchResult(query: string, result: SearchResult): void {
+		const cacheKey = query.toLowerCase().trim();
+		const now = Date.now();
+
+		this.searchCache.set(cacheKey, result);
+		this.searchCacheTimestamps.set(cacheKey, now);
+		this.debug(`[SearchCache] Cached search result for: ${query} (${result.tracks.length} tracks)`);
+	}
+
+	/**
+	 * Clear expired search cache entries
+	 */
+	private clearExpiredSearchCache(): void {
+		const now = Date.now();
+		for (const [key, timestamp] of this.searchCacheTimestamps.entries()) {
+			if (now - timestamp >= this.SEARCH_CACHE_TTL) {
+				this.searchCache.delete(key);
+				this.searchCacheTimestamps.delete(key);
+				this.debug(`[SearchCache] Cleared expired cache entry: ${key}`);
+			}
+		}
+	}
+
+	/**
+	 * Clear all search cache entries
+	 * @example
+	 * player.clearSearchCache();
+	 */
+	public clearSearchCache(): void {
+		const cacheSize = this.searchCache.size;
+		this.searchCache.clear();
+		this.searchCacheTimestamps.clear();
+		this.debug(`[SearchCache] Cleared all ${cacheSize} search cache entries`);
+	}
+
+	/**
+	 * Get search cache statistics
+	 * @returns Search cache statistics
+	 * @example
+	 * const stats = player.getSearchCacheStats();
+	 * console.log(`Search cache size: ${stats.size}, Expired: ${stats.expiredEntries}`);
+	 */
+	public getSearchCacheStats(): { size: number; expiredEntries: number; queries: string[] } {
+		const now = Date.now();
+		let expiredEntries = 0;
+		const queries: string[] = [];
+
+		for (const [key, timestamp] of this.searchCacheTimestamps.entries()) {
+			if (now - timestamp >= this.SEARCH_CACHE_TTL) {
+				expiredEntries++;
+			} else {
+				queries.push(key);
+			}
+		}
+
+		return {
+			size: this.searchCache.size,
+			expiredEntries,
+			queries,
+		};
+	}
+
+	/**
+	 * Debug method to check for duplicate search calls
+	 * @param query The search query to check
+	 * @returns Debug information about the query
+	 */
+	public debugSearchQuery(query: string): {
+		isCached: boolean;
+		cacheAge?: number;
+		pluginCount: number;
+		ttsFiltered: boolean;
+	} {
+		const cacheKey = query.toLowerCase().trim();
+		const now = Date.now();
+		const cachedTimestamp = this.searchCacheTimestamps.get(cacheKey);
+		const isCached = cachedTimestamp && now - cachedTimestamp < this.SEARCH_CACHE_TTL;
+
+		const allPlugins = this.pluginManager.getAll();
+		const plugins = allPlugins.filter((p) => {
+			if (p.name.toLowerCase() === "tts" && !query.toLowerCase().startsWith("tts:")) {
+				return false;
+			}
+			return true;
+		});
+
+		return {
+			isCached: !!isCached,
+			cacheAge: cachedTimestamp ? now - cachedTimestamp : undefined,
+			pluginCount: plugins.length,
+			ttsFiltered: allPlugins.length > plugins.length,
 		};
 	}
 
