@@ -98,6 +98,11 @@ export class Player extends EventEmitter {
 	private extensions: BaseExtension[] = [];
 	private extensionContext!: ExtensionContext;
 
+	// Cache for plugin matching to improve performance
+	private pluginCache = new Map<string, SourcePlugin>();
+	private readonly PLUGIN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+	private pluginCacheTimestamps = new Map<string, number>();
+
 	/**
 	 * Attach an extension to the player
 	 *
@@ -804,32 +809,194 @@ export class Player extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Get cached plugin or find and cache a new one
+	 * @param track The track to find plugin for
+	 * @returns The matching plugin or null if not found
+	 */
+	private getCachedPlugin(track: Track): SourcePlugin | null {
+		const cacheKey = `${track.source}:${track.url}`;
+		const now = Date.now();
+
+		// Check if cache is still valid
+		const cachedTimestamp = this.pluginCacheTimestamps.get(cacheKey);
+		if (cachedTimestamp && now - cachedTimestamp < this.PLUGIN_CACHE_TTL) {
+			const cachedPlugin = this.pluginCache.get(cacheKey);
+			if (cachedPlugin) {
+				this.debug(`[PluginCache] Using cached plugin for ${track.source}: ${cachedPlugin.name}`);
+				return cachedPlugin;
+			}
+		}
+
+		// Find new plugin and cache it
+		this.debug(`[PluginCache] Finding plugin for track: ${track.title} (${track.source})`);
+		const plugin = this.pluginManager.findPlugin(track.url) || this.pluginManager.get(track.source);
+
+		if (plugin) {
+			this.pluginCache.set(cacheKey, plugin);
+			this.pluginCacheTimestamps.set(cacheKey, now);
+			this.debug(`[PluginCache] Cached plugin: ${plugin.name} for ${track.source}`);
+			return plugin;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Clear expired cache entries
+	 */
+	private clearExpiredCache(): void {
+		const now = Date.now();
+		for (const [key, timestamp] of this.pluginCacheTimestamps.entries()) {
+			if (now - timestamp >= this.PLUGIN_CACHE_TTL) {
+				this.pluginCache.delete(key);
+				this.pluginCacheTimestamps.delete(key);
+				this.debug(`[PluginCache] Cleared expired cache entry: ${key}`);
+			}
+		}
+	}
+
+	/**
+	 * Clear all plugin cache entries
+	 * @example
+	 * player.clearPluginCache();
+	 */
+	public clearPluginCache(): void {
+		const cacheSize = this.pluginCache.size;
+		this.pluginCache.clear();
+		this.pluginCacheTimestamps.clear();
+		this.debug(`[PluginCache] Cleared all ${cacheSize} cache entries`);
+	}
+
+	/**
+	 * Get plugin cache statistics
+	 * @returns Cache statistics
+	 * @example
+	 * const stats = player.getPluginCacheStats();
+	 * console.log(`Cache size: ${stats.size}, Hit rate: ${stats.hitRate}%`);
+	 */
+	public getPluginCacheStats(): { size: number; hitRate: number; expiredEntries: number } {
+		const now = Date.now();
+		let expiredEntries = 0;
+
+		for (const timestamp of this.pluginCacheTimestamps.values()) {
+			if (now - timestamp >= this.PLUGIN_CACHE_TTL) {
+				expiredEntries++;
+			}
+		}
+
+		return {
+			size: this.pluginCache.size,
+			hitRate: 0, // Would need to track hits/misses to calculate this
+			expiredEntries,
+		};
+	}
+
 	/** Build AudioResource for a given track using the plugin pipeline */
 	private async resourceFromTrack(track: Track): Promise<AudioResource> {
-		// Resolve plugin similar to playNext
-		const plugin = this.pluginManager.findPlugin(track.url) || this.pluginManager.get(track.source);
-		if (!plugin) throw new Error(`No plugin found for track: ${track.title}`);
+		this.debug(`[ResourceFromTrack] Starting resource creation for track: ${track.title} (${track.source})`);
 
-		let streamInfo: any;
+		// Clear expired cache entries periodically
+		if (Math.random() < 0.1) {
+			// 10% chance to clean cache
+			this.clearExpiredCache();
+		}
+
+		// Resolve plugin using cache
+		const plugin = this.getCachedPlugin(track);
+		if (!plugin) {
+			this.debug(`[ResourceFromTrack] No plugin found for track: ${track.title} (${track.source})`);
+			throw new Error(`No plugin found for track: ${track.title}`);
+		}
+
+		this.debug(`[ResourceFromTrack] Using plugin: ${plugin.name} for track: ${track.title}`);
+
+		let streamInfo: StreamInfo | null = null;
+		const timeoutMs = this.options.extractorTimeout ?? 15000;
+
 		try {
-			streamInfo = await withTimeout(plugin.getStream(track), this.options.extractorTimeout ?? 15000, "getStream timed out");
+			this.debug(`[ResourceFromTrack] Attempting getStream with ${plugin.name}, timeout: ${timeoutMs}ms`);
+			const startTime = Date.now();
+			streamInfo = await withTimeout(plugin.getStream(track), timeoutMs, "getStream timed out");
+			const duration = Date.now() - startTime;
+			this.debug(`[ResourceFromTrack] getStream successful with ${plugin.name} in ${duration}ms`);
+
+			if (!streamInfo?.stream) {
+				this.debug(`[ResourceFromTrack] getStream returned no stream from ${plugin.name}`);
+				throw new Error(`No stream returned from ${plugin.name}`);
+			}
 		} catch (streamError) {
+			const errorMessage = streamError instanceof Error ? streamError.message : String(streamError);
+			this.debug(`[ResourceFromTrack] getStream failed with ${plugin.name}: ${errorMessage}`);
+
+			// Log more details for debugging
+			if (streamError instanceof Error && streamError.stack) {
+				this.debug(`[ResourceFromTrack] getStream error stack:`, streamError.stack);
+			}
+
 			// try fallbacks
+			this.debug(`[ResourceFromTrack] Attempting fallback plugins for track: ${track.title}`);
 			const allplugs = this.pluginManager.getAll();
+			let fallbackAttempts = 0;
+
 			for (const p of allplugs) {
-				if (typeof (p as any).getFallback !== "function") continue;
+				if (typeof (p as any).getFallback !== "function" && typeof (p as any).getStream !== "function") {
+					this.debug(`[ResourceFromTrack] Skipping plugin ${(p as any).name} - no getFallback or getStream method`);
+					continue;
+				}
+
+				fallbackAttempts++;
+				this.debug(`[ResourceFromTrack] Trying fallback plugin ${(p as any).name} (attempt ${fallbackAttempts})`);
+
 				try {
+					// Try getStream first
+					const startTime = Date.now();
+					streamInfo = await withTimeout(p.getStream(track), timeoutMs, "getStream timed out");
+					const duration = Date.now() - startTime;
+
+					if (streamInfo?.stream) {
+						this.debug(`[ResourceFromTrack] Fallback getStream successful with ${(p as any).name} in ${duration}ms`);
+						break;
+					}
+
+					// Try getFallback if getStream didn't work
+					this.debug(`[ResourceFromTrack] Trying getFallback with ${(p as any).name}`);
+					const fallbackStartTime = Date.now();
 					streamInfo = await withTimeout(
 						(p as any).getFallback(track),
-						this.options.extractorTimeout ?? 15000,
+						timeoutMs,
 						`getFallback timed out for plugin ${(p as any).name}`,
 					);
-					if (!streamInfo?.stream) continue;
-					break;
-				} catch {}
+					const fallbackDuration = Date.now() - fallbackStartTime;
+
+					if (streamInfo?.stream) {
+						this.debug(`[ResourceFromTrack] Fallback getFallback successful with ${(p as any).name} in ${fallbackDuration}ms`);
+						break;
+					}
+
+					this.debug(`[ResourceFromTrack] Fallback plugin ${(p as any).name} returned no stream`);
+				} catch (fallbackError) {
+					const errorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+					this.debug(`[ResourceFromTrack] Fallback plugin ${(p as any).name} failed: ${errorMessage}`);
+
+					// Log more details for debugging
+					if (fallbackError instanceof Error && fallbackError.stack) {
+						this.debug(`[ResourceFromTrack] Fallback error stack:`, fallbackError.stack);
+					}
+				}
 			}
-			if (!streamInfo?.stream) throw new Error(`All getFallback attempts failed for track: ${track.title}`);
+
+			if (!streamInfo?.stream) {
+				this.debug(`[ResourceFromTrack] All ${fallbackAttempts} fallback attempts failed for track: ${track.title}`);
+				throw new Error(`All getFallback attempts failed for track: ${track.title}`);
+			}
 		}
+
+		this.debug(
+			`[ResourceFromTrack] Stream obtained, type: ${streamInfo.type}, metadata keys: ${Object.keys(
+				streamInfo.metadata || {},
+			).join(", ")}`,
+		);
 
 		const mapToStreamType = (type: string): StreamType => {
 			switch (type) {
@@ -844,15 +1011,23 @@ export class Player extends EventEmitter {
 		};
 
 		const inputType = mapToStreamType(streamInfo.type);
-		return createAudioResource(streamInfo.stream, {
+		this.debug(`[ResourceFromTrack] Creating AudioResource with inputType: ${inputType}`);
+
+		// Merge metadata safely
+		const mergedMetadata = {
+			...track,
+			...(streamInfo.metadata || {}),
+		};
+
+		const audioResource = createAudioResource(streamInfo.stream, {
 			// Prefer plugin-provided metadata (e.g., precise duration), fallback to track fields
-			metadata: {
-				...(track as any),
-				...((streamInfo as any)?.metadata || {}),
-			},
+			metadata: mergedMetadata,
 			inputType,
 			inlineVolume: true,
 		});
+
+		this.debug(`[ResourceFromTrack] AudioResource created successfully for track: ${track.title}`);
+		return audioResource;
 	}
 
 	private async generateWillNext(): Promise<void> {

@@ -3,9 +3,9 @@ const assert = require("node:assert/strict");
 
 const { PlayerManager } = require("../core/dist");
 
-test("Player setVolume constraints and event", () => {
+test("Player setVolume constraints and event", async () => {
 	const mgr = new PlayerManager();
-	const player = mgr.create("g1");
+	const player = await mgr.create("g1");
 
 	// out of range
 	assert.equal(player.setVolume(-10), false);

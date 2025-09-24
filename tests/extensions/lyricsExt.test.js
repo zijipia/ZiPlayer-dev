@@ -33,7 +33,7 @@ test("lyricsExt attaches lyrics on trackStart and emits event", async () => {
 	});
 
 	const mgr = new PlayerManager({ extensions: [ext] });
-	const player = mgr.create("guild-lyrics-1", { extensions: ["lyricsExt"] });
+	const player = await mgr.create("guild-lyrics-1", { extensions: ["lyricsExt"] });
 
 	let payload = null;
 	let changed = null;

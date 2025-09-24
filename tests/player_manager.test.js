@@ -26,11 +26,11 @@ function makeTrack(id = "t1", title = "Track 1") {
 	return { id, title, url: `https://example.com/${id}`, duration: 1, requestedBy: "tester", source: "test" };
 }
 
-test("PlayerManager create/get/has/delete basics and plugin propagation", () => {
+test("PlayerManager create/get/has/delete basics and plugin propagation", async () => {
 	const mgr = new PlayerManager({ plugins: [new DummyPlugin()] });
 
 	assert.equal(mgr.size, 0);
-	const player = mgr.create("guild-1", {});
+	const player = await mgr.create("guild-1", {});
 	assert.equal(mgr.size, 1);
 	assert.ok(mgr.has("guild-1"));
 	assert.equal(mgr.get("guild-1"), player);
@@ -56,7 +56,7 @@ test("PlayerManager create/get/has/delete basics and plugin propagation", () => 
 	assert.equal(mgr.size, 0);
 });
 
-test("PlayerManager extension activation by name and ctor", () => {
+test("PlayerManager extension activation by name and ctor", async () => {
 	let activated = 0;
 	class DummyExt {
 		static name = "dext";
@@ -70,7 +70,7 @@ test("PlayerManager extension activation by name and ctor", () => {
 	}
 
 	const mgr = new PlayerManager({ extensions: [DummyExt] });
-	const player = mgr.create("g2", { extensions: ["dext"] });
+	const player = await mgr.create("g2", { extensions: ["dext"] });
 	assert.ok(player);
 	assert.equal(activated, 1);
 
@@ -78,6 +78,6 @@ test("PlayerManager extension activation by name and ctor", () => {
 	activated = 0;
 	const inst = new DummyExt();
 	const mgr2 = new PlayerManager({ extensions: [inst] });
-	mgr2.create("g3", { extensions: ["dext"] });
+	await mgr2.create("g3", { extensions: ["dext"] });
 	assert.equal(activated, 1);
 });
