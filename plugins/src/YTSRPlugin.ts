@@ -58,7 +58,20 @@ export class YTSRPlugin extends BasePlugin {
 
 		// Tránh xử lý các pattern rõ ràng cho các extractor khác
 		if (q.startsWith("tts:") || q.startsWith("say ")) return false;
-		if (q.startsWith("spotify:") || q.includes("open.spotify.com")) return false;
+		if (q.startsWith("spotify:")) return false;
+		// If the query is a URL, check its hostname for Spotify domains
+		if (q.startsWith("http://") || q.startsWith("https://")) {
+			try {
+				const parsed = new URL(query);
+				const spotifyHosts = ["open.spotify.com", "play.spotify.com", "www.spotify.com"];
+				if (spotifyHosts.includes(parsed.hostname.toLowerCase())) return false;
+			} catch (e) {
+				/* ignore */
+			}
+		} else if (q.includes("open.spotify.com")) {
+			// fallback for non-URL text queries
+			return false;
+		}
 		if (q.includes("soundcloud")) return false;
 
 		// Xử lý URL YouTube
