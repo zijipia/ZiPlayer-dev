@@ -2,11 +2,15 @@
 	"name": "ziplayer-dev-root",
 	"private": true,
 	"scripts": {
-		"test": "node --test",
+		"test": "node --test tests/**/*.js",
 		"format": "npx prettier --ignore-path .gitignore --write .",
 		"format:check": "npx prettier --ignore-path .gitignore -l .",
 		"web:dev": "npm run dev --prefix page",
 		"web:build": "npm run build --prefix page",
 		"web:start": "npm run start --prefix page"
+	},
+	"devDependencies": {
+		"discord.js": "^14.22.1",
+		"dotenv": "^17.2.2"
 	}
 }
