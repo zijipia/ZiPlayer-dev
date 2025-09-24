@@ -176,7 +176,7 @@ client.on("messageCreate", async (message) => {
 	}
 });
 
-client.login(process.env.TOKEN);
+client.login(process.env.DISCORD_TOKEN);
 
 process.on("uncaughtException", function (err) {
 	console.log("Caught exception: " + err);
