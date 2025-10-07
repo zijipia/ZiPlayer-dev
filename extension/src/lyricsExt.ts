@@ -93,7 +93,7 @@ export class lyricsExt extends BaseExtension {
 	private manager?: PlayerManager;
 
 	private options: LyricsOptions;
-	private schedules: Map<string, { timers: NodeJS.Timeout[]; startAt: number; lines: { timeMs: number; text: string }[] }> =
+	private schedules: Map<string, { timers: NodeJS.Timeout[]; startAt: number; lines: { timeMs: number; text: string }[]; pausedAt?: number; pausedDuration?: number }> =
 		new Map();
 
 	/**
@@ -197,6 +197,16 @@ export class lyricsExt extends BaseExtension {
 					} catch (e: any) {
 						this.debug(`lyrics error: ${e?.message || e}`);
 					}
+				});
+
+				// Handle player pause/resume for lyrics sync
+				player.on("playerPause", () => {
+					this.debug("playerPause: pausing lyrics sync");
+					this.pauseLineSchedule(player);
+				});
+				player.on("playerResume", () => {
+					this.debug("playerResume: resuming lyrics sync");
+					this.resumeLineSchedule(player);
 				});
 
 				// Clear any running schedule when track ends or player is destroyed
@@ -336,25 +346,7 @@ export class lyricsExt extends BaseExtension {
 		this.debug(`schedule: ${lines.length} lines; startAt=${startAt}`);
 
 		const emitAtIndex = (idx: number) => {
-			const prev = idx > 0 ? lines[idx - 1] : undefined;
-			const curr = lines[idx];
-			const next = idx + 1 < lines.length ? lines[idx + 1] : undefined;
-			const payload: LyricsResult = {
-				...result,
-				// For per-line events, expose current/prev/next and map text to current to be backward-compatible
-				current: curr?.text ?? null,
-				previous: prev?.text ?? null,
-				next: next?.text ?? null,
-				text: curr?.text ?? null,
-				lineIndex: idx,
-				timeMs: curr?.timeMs ?? 0,
-			};
-			this.debug(`emit line idx=${idx} t=${curr?.timeMs} "${this.trunc(curr?.text || "", 80)}"`);
-			if (this.manager && typeof (this.manager as any).emit === "function") {
-				this.manager.emit("lyricsChange", player, track, payload);
-			} else {
-				(player as any)?.emit?.("lyricsChange", track, payload);
-			}
+			this.emitLineAtIndex(player, lines, idx, result);
 		};
 
 		// Emit immediate line if already passed due to fetch delay
@@ -375,6 +367,94 @@ export class lyricsExt extends BaseExtension {
 			timers.push(t);
 		}
 		this.debug(`scheduled timers=${timers.length}`);
+	}
+
+	private pauseLineSchedule(player: Player) {
+		const sched = this.schedules.get(player.guildId);
+		if (!sched) return;
+		
+		// Clear all existing timers
+		for (const t of sched.timers) {
+			try {
+				clearTimeout(t);
+			} catch {}
+		}
+		
+		// Record pause time and accumulated paused duration
+		const now = Date.now();
+		sched.pausedAt = now;
+		sched.pausedDuration = (sched.pausedDuration || 0) + (now - sched.startAt);
+		
+		this.debug(`paused lyrics sync, pausedDuration=${sched.pausedDuration}ms`);
+	}
+
+	private resumeLineSchedule(player: Player) {
+		const sched = this.schedules.get(player.guildId);
+		if (!sched || !sched.pausedAt) return;
+		
+		// Calculate new start time accounting for paused duration
+		const pausedDuration = sched.pausedDuration || 0;
+		const newStartAt = Date.now() - pausedDuration;
+		sched.startAt = newStartAt;
+		sched.pausedAt = undefined;
+		
+		// Clear existing timers array
+		sched.timers = [];
+		
+		// Reschedule remaining lines
+		const elapsed = Date.now() - newStartAt;
+		let currentIdx = -1;
+		for (let i = 0; i < sched.lines.length; i++) {
+			if (sched.lines[i].timeMs <= elapsed) currentIdx = i;
+			else break;
+		}
+		
+		// Emit current line if needed
+		if (currentIdx >= 0) {
+			this.debug(`resume emit at idx=${currentIdx} (elapsed=${elapsed}ms)`);
+			this.emitLineAtIndex(player, sched.lines, currentIdx);
+		}
+		
+		// Schedule remaining lines
+		for (let i = Math.max(0, currentIdx + 1); i < sched.lines.length; i++) {
+			const delay = Math.max(0, sched.lines[i].timeMs - (Date.now() - newStartAt));
+			const t = setTimeout(() => this.emitLineAtIndex(player, sched.lines, i), delay);
+			sched.timers.push(t);
+		}
+		
+		this.debug(`resumed lyrics sync, scheduled timers=${sched.timers.length}`);
+	}
+
+	private emitLineAtIndex(player: Player, sched: any, idx: number, result?: LyricsResult) {
+		const lines = sched.lines || sched;
+		const prev = idx > 0 ? lines[idx - 1] : undefined;
+		const curr = lines[idx];
+		const next = idx + 1 < lines.length ? lines[idx + 1] : undefined;
+		
+		// Get current track
+		const track = player.currentTrack;
+		if (!track) return;
+		
+		const payload: LyricsResult = {
+			...(result || {
+				provider: "lrclib",
+				source: "LRCLIB",
+				url: "https://lrclib.net/",
+			}),
+			current: curr?.text ?? null,
+			previous: prev?.text ?? null,
+			next: next?.text ?? null,
+			text: curr?.text ?? null,
+			lineIndex: idx,
+			timeMs: curr?.timeMs ?? 0,
+		};
+		
+		this.debug(`emit line idx=${idx} t=${curr?.timeMs} "${this.trunc(curr?.text || "", 80)}"`);
+		if (this.manager && typeof (this.manager as any).emit === "function") {
+			this.manager.emit("lyricsChange", player, track, payload);
+		} else {
+			(player as any)?.emit?.("lyricsChange", track, payload);
+		}
 	}
 
 	private clearLineSchedule(player: Player) {
