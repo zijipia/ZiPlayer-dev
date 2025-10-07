@@ -93,8 +93,16 @@ export class lyricsExt extends BaseExtension {
 	private manager?: PlayerManager;
 
 	private options: LyricsOptions;
-	private schedules: Map<string, { timers: NodeJS.Timeout[]; startAt: number; lines: { timeMs: number; text: string }[]; pausedAt?: number; pausedDuration?: number }> =
-		new Map();
+	private schedules: Map<
+		string,
+		{
+			timers: NodeJS.Timeout[];
+			startAt: number;
+			lines: { timeMs: number; text: string }[];
+			pausedAt?: number;
+			pausedDuration?: number;
+		}
+	> = new Map();
 
 	/**
 	 * Creates a new lyrics extension instance.
@@ -372,35 +380,35 @@ export class lyricsExt extends BaseExtension {
 	private pauseLineSchedule(player: Player) {
 		const sched = this.schedules.get(player.guildId);
 		if (!sched) return;
-		
+
 		// Clear all existing timers
 		for (const t of sched.timers) {
 			try {
 				clearTimeout(t);
 			} catch {}
 		}
-		
+
 		// Record pause time and accumulated paused duration
 		const now = Date.now();
 		sched.pausedAt = now;
 		sched.pausedDuration = (sched.pausedDuration || 0) + (now - sched.startAt);
-		
+
 		this.debug(`paused lyrics sync, pausedDuration=${sched.pausedDuration}ms`);
 	}
 
 	private resumeLineSchedule(player: Player) {
 		const sched = this.schedules.get(player.guildId);
 		if (!sched || !sched.pausedAt) return;
-		
+
 		// Calculate new start time accounting for paused duration
 		const pausedDuration = sched.pausedDuration || 0;
 		const newStartAt = Date.now() - pausedDuration;
 		sched.startAt = newStartAt;
 		sched.pausedAt = undefined;
-		
+
 		// Clear existing timers array
 		sched.timers = [];
-		
+
 		// Reschedule remaining lines
 		const elapsed = Date.now() - newStartAt;
 		let currentIdx = -1;
@@ -408,20 +416,20 @@ export class lyricsExt extends BaseExtension {
 			if (sched.lines[i].timeMs <= elapsed) currentIdx = i;
 			else break;
 		}
-		
+
 		// Emit current line if needed
 		if (currentIdx >= 0) {
 			this.debug(`resume emit at idx=${currentIdx} (elapsed=${elapsed}ms)`);
 			this.emitLineAtIndex(player, sched.lines, currentIdx);
 		}
-		
+
 		// Schedule remaining lines
 		for (let i = Math.max(0, currentIdx + 1); i < sched.lines.length; i++) {
 			const delay = Math.max(0, sched.lines[i].timeMs - (Date.now() - newStartAt));
 			const t = setTimeout(() => this.emitLineAtIndex(player, sched.lines, i), delay);
 			sched.timers.push(t);
 		}
-		
+
 		this.debug(`resumed lyrics sync, scheduled timers=${sched.timers.length}`);
 	}
 
@@ -430,11 +438,11 @@ export class lyricsExt extends BaseExtension {
 		const prev = idx > 0 ? lines[idx - 1] : undefined;
 		const curr = lines[idx];
 		const next = idx + 1 < lines.length ? lines[idx + 1] : undefined;
-		
+
 		// Get current track
 		const track = player.currentTrack;
 		if (!track) return;
-		
+
 		const payload: LyricsResult = {
 			...(result || {
 				provider: "lrclib",
@@ -448,7 +456,7 @@ export class lyricsExt extends BaseExtension {
 			lineIndex: idx,
 			timeMs: curr?.timeMs ?? 0,
 		};
-		
+
 		this.debug(`emit line idx=${idx} t=${curr?.timeMs} "${this.trunc(curr?.text || "", 80)}"`);
 		if (this.manager && typeof (this.manager as any).emit === "function") {
 			this.manager.emit("lyricsChange", player, track, payload);

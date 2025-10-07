@@ -208,7 +208,7 @@ export class TTSPlugin extends BasePlugin {
 	 */
 	async getStream(track: Track): Promise<StreamInfo> {
 		const cfg = this.extractConfig(track);
-		if (track.source !== this.name) return {stream:null as any, type:"arbitrary" };
+		if (track.source !== this.name) return { stream: null as any, type: "arbitrary" };
 		if (this.opts.createStream && typeof this.opts.createStream === "function") {
 			const out = await this.opts.createStream(cfg.text, { lang: cfg.lang, slow: cfg.slow, track });
 			let type: StreamInfo["type"] | undefined;
