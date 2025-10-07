@@ -285,17 +285,25 @@ export class Player extends EventEmitter {
 					this.debug(`[Player] getStream failed, trying getFallback:`, streamError);
 					const allplugs = this.pluginManager.getAll();
 					for (const p of allplugs) {
-						if (typeof (p as any).getFallback !== "function") {
+						if (typeof (p as any).getFallback !== "function" && typeof (p as any).getStream !== "function") {
 							continue;
 						}
 						try {
+							streamInfo = await withTimeout(
+								(p as any).getStream(track),
+								this.options.extractorTimeout ?? 15000,
+								`getStream timed out for plugin ${p.name}`,
+							);
+							if ((streamInfo as any)?.stream) {
+								this.debug(`[Player] getStream succeeded with plugin ${p.name} for track: ${track.title}`);
+								break;
+							}
 							streamInfo = await withTimeout(
 								(p as any).getFallback(track),
 								this.options.extractorTimeout ?? 15000,
 								`getFallback timed out for plugin ${p.name}`,
 							);
 							if (!(streamInfo as any)?.stream) continue;
-							this.debug(`[Player] getFallback succeeded with plugin ${p.name} for track: ${track.title}`);
 							break;
 						} catch (fallbackError) {
 							this.debug(`[Player] getFallback failed with plugin ${p.name}:`, fallbackError);
